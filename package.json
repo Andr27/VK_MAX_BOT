@@ -1,0 +1,22 @@
+{
+  "name": "my-max-bot",
+  "version": "1.0.0",
+  "description": "MAX Bot API бот",
+  "main": "dist/bot.js",
+  "scripts": {
+    "dev": "nodemon --exec ts-node src/bot.ts",
+    "build": "tsc",
+    "start": "node dist/bot.js",
+    "prod": "npm run build && npm run start"
+  },
+  "dependencies": {
+    "@maxhub/max-bot-api": "^0.2.1",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "nodemon": "^3.1.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
