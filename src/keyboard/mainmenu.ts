@@ -15,9 +15,8 @@ const keyboard_mainmenu = Keyboard.inlineKeyboard([
 ]);
 
 const keyboard_helpmenu = Keyboard.inlineKeyboard([
-
     [
-        Keyboard.button.callback('Контакты', 'contact'),
-        Keyboard.button.callback('🔙Назад'), 'backtomenu'),
+        Keyboard.button.callback('Помощь❓', 'help'),
+        Keyboard.button.callback('🔙Назад', 'back'),
     ],
 ]);
