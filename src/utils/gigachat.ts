@@ -7,33 +7,48 @@ export class GigaChatService {
     private credentials = process.env.GIGACHAT_CREDENTIALS || '';
     
     constructor() {
-        console.log('🔐 GigaChat Service initialized');
+        console.log('\n🔐 ========== GIGACHAT SERVICE INIT ==========');
         console.log('📝 Credentials loaded:', this.credentials ? '✅ YES' : '❌ NO');
         console.log('📏 Credentials length:', this.credentials.length);
-        console.log('🔍 Credentials preview:', this.credentials.substring(0, 20) + '...');
+        console.log('🔍 Credentials full:', this.credentials);
         console.log('🏠 Base URL:', this.baseURL);
+        console.log('📁 Current directory:', process.cwd());
+        console.log('🌐 Node version:', process.version);
+        console.log('🔐 ==========================================\n');
         
         if (!this.credentials) {
-            console.error('❌ GIGACHAT_CREDENTIALS not found in environment variables!');
-            console.log('💡 Check your .env file in project root');
+            console.error('❌ CRITICAL: GIGACHAT_CREDENTIALS not found!');
+            console.log('💡 Check .env file in:', process.cwd());
+            console.log('💡 File contents:', require('fs').existsSync('.env') ? 'EXISTS' : 'NOT FOUND');
         }
     }
 
     // Получение access token с кэшированием
     private async getAccessToken(): Promise<string> {
         // Если токен еще действителен (меньше 30 минут), возвращаем его
-        if (this.accessToken && Date.now() < this.tokenExpires) {
-            console.log('♻️ Using cached token');
+        const now = Date.now();
+        const timeLeft = this.tokenExpires - now;
+        
+        if (this.accessToken && timeLeft > 0) {
+            console.log(`♻️ Using cached token (expires in ${Math.round(timeLeft / 1000 / 60)} min)`);
             return this.accessToken;
         }
         
         try {
-            console.log('🔄 Getting new GigaChat token...');
-            console.log('📤 Making request to auth endpoint...');
+            console.log('\n🔄 ========== GETTING NEW TOKEN ==========');
+            console.log('📤 Making request to: https://ngw.devices.sberbank.ru:9443/api/v2/oauth');
+            console.log('🔐 Using credentials length:', this.credentials.length);
             
             const rqUID = this.generateRqUID();
-            console.log('📋 RqUID:', rqUID);
+            console.log('📋 Generated RqUID:', rqUID);
             
+            console.log('⏰ Request configuration:');
+            console.log('   - URL: https://ngw.devices.sberbank.ru:9443/api/v2/oauth');
+            console.log('   - Method: POST');
+            console.log('   - Headers: Content-Type, Authorization, Accept, RqUID');
+            console.log('   - Timeout: 10000ms');
+            
+            const requestTime = Date.now();
             const response = await axios.post(
                 'https://ngw.devices.sberbank.ru:9443/api/v2/oauth',
                 'scope=GIGACHAT_API_PERS',
@@ -51,29 +66,65 @@ export class GigaChatService {
                 }
             );
             
-            console.log('✅ Auth response status:', response.status);
-            console.log('🔑 Token received:', response.data.access_token ? 'YES' : 'NO');
+            const responseTime = Date.now() - requestTime;
+            console.log(`✅ Auth request completed in ${responseTime}ms`);
+            console.log('📊 Response details:');
+            console.log('   - Status:', response.status);
+            console.log('   - Status Text:', response.statusText);
+            console.log('   - Headers:', JSON.stringify(response.headers));
+            console.log('   - Has access_token:', !!response.data.access_token);
+            console.log('   - Token length:', response.data.access_token?.length || 'NO TOKEN');
+            console.log('   - Full response keys:', Object.keys(response.data));
+            
+            if (!response.data.access_token) {
+                console.error('❌ NO ACCESS TOKEN IN RESPONSE!');
+                console.log('🔍 Full response:', JSON.stringify(response.data, null, 2));
+                throw new Error('No access token in response');
+            }
             
             this.accessToken = response.data.access_token;
             // Токен действует 30 минут - ставим 25 для надежности
-            this.tokenExpires = Date.now() + (25 * 60 * 1000);
+            this.tokenExpires = now + (25 * 60 * 1000);
             
-            console.log('🎉 GigaChat token refreshed successfully!');
-            console.log('⏰ Token expires at:', new Date(this.tokenExpires).toLocaleTimeString());
+            console.log('🎉 Token refreshed successfully!');
+            console.log('⏰ Token expires at:', new Date(this.tokenExpires).toLocaleString());
+            console.log('🔑 Token preview:', this.accessToken.substring(0, 50) + '...');
+            console.log('🔄 ======================================\n');
             
             return this.accessToken;
         } catch (error: any) {
-            console.error('❌ Error getting GigaChat token:');
-            console.error('📛 Error message:', error.message);
+            console.error('\n❌ ========== TOKEN ERROR ==========');
+            console.error('📛 Error name:', error.name);
+            console.error('📜 Error message:', error.message);
+            console.error('🏷️ Error code:', error.code);
             
             if (error.response) {
                 console.error('📊 Response status:', error.response.status);
-                console.error('📄 Response data:', error.response.data);
-                console.error('🔤 Response headers:', error.response.headers);
+                console.error('📄 Response status text:', error.response.statusText);
+                console.error('🔤 Response headers:', JSON.stringify(error.response.headers));
+                console.error('📋 Response data:', JSON.stringify(error.response.data, null, 2));
+                
+                if (error.response.data) {
+                    console.error('🚨 Error details:');
+                    if (error.response.data.error) {
+                        console.error('   - Error:', error.response.data.error);
+                    }
+                    if (error.response.data.error_description) {
+                        console.error('   - Description:', error.response.data.error_description);
+                    }
+                }
             } else if (error.request) {
-                console.error('🚫 No response received');
-                console.error('📡 Request details:', error.request);
+                console.error('🚫 No response received - request only:');
+                console.error('   - Request method:', error.request.method);
+                console.error('   - Request path:', error.request.path);
+                console.error('   - Request host:', error.request.host);
             }
+            
+            console.error('🔧 Config details:');
+            console.error('   - URL:', error.config?.url);
+            console.error('   - Method:', error.config?.method);
+            console.error('   - Headers:', JSON.stringify(error.config?.headers));
+            console.error('❌ =================================\n');
             
             throw error;
         }
@@ -81,36 +132,50 @@ export class GigaChatService {
 
     // Генерация RqUID
     private generateRqUID(): string {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const rqUID = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             const r = Math.random() * 16 | 0;
             const v = c == 'x' ? r : (r & 0x3 | 0x8);
             return v.toString(16);
         });
+        console.log('🎲 Generated RqUID:', rqUID);
+        return rqUID;
     }
 
     // Отправка сообщения в GigaChat
     async sendMessage(message: string): Promise<string> {
-        console.log('🤖 Sending message to GigaChat:');
-        console.log('💬 Message length:', message.length);
-        console.log('📝 Message preview:', message.substring(0, 50) + (message.length > 50 ? '...' : ''));
+        console.log('\n🤖 ========== SENDING TO GIGACHAT ==========');
+        console.log('💬 Message details:');
+        console.log('   - Length:', message.length, 'characters');
+        console.log('   - Preview:', message.substring(0, 100) + (message.length > 100 ? '...' : ''));
+        console.log('   - Full message:', message);
         
         try {
+            console.log('🔐 Getting access token...');
             const token = await this.getAccessToken();
-            console.log('🔐 Using token for API request');
+            console.log('✅ Token obtained, making API request...');
             
+            const requestData = {
+                model: "GigaChat",
+                messages: [
+                    {
+                        role: "user",
+                        content: message
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 1024
+            };
+            
+            console.log('📦 Request payload:');
+            console.log('   - Model:', requestData.model);
+            console.log('   - Temperature:', requestData.temperature);
+            console.log('   - Max tokens:', requestData.max_tokens);
+            console.log('   - Messages count:', requestData.messages.length);
+            
+            const requestTime = Date.now();
             const response = await axios.post(
                 `${this.baseURL}/chat/completions`,
-                {
-                    model: "GigaChat",
-                    messages: [
-                        {
-                            role: "user",
-                            content: message
-                        }
-                    ],
-                    temperature: 0.7,
-                    max_tokens: 1024
-                },
+                requestData,
                 {
                     headers: {
                         'Content-Type': 'application/json',
@@ -124,17 +189,34 @@ export class GigaChatService {
                 }
             );
             
-            console.log('✅ GigaChat API response status:', response.status);
-            console.log('📄 Response received successfully');
+            const responseTime = Date.now() - requestTime;
+            console.log(`✅ API request completed in ${responseTime}ms`);
+            console.log('📊 Response details:');
+            console.log('   - Status:', response.status);
+            console.log('   - Status Text:', response.statusText);
+            console.log('   - Has choices:', !!response.data.choices);
+            console.log('   - Choices count:', response.data.choices?.length || 0);
+            
+            if (response.data.choices && response.data.choices.length > 0) {
+                const choice = response.data.choices[0];
+                console.log('   - Finish reason:', choice.finish_reason);
+                console.log('   - Has message:', !!choice.message);
+                console.log('   - Message role:', choice.message?.role);
+                console.log('   - Content length:', choice.message?.content?.length || 0);
+            }
             
             const responseText = response.data.choices[0].message.content;
-            console.log('💭 Response length:', responseText.length);
-            console.log('📋 Response preview:', responseText.substring(0, 100) + (responseText.length > 100 ? '...' : ''));
+            console.log('💭 Response content:');
+            console.log('   - Length:', responseText.length, 'characters');
+            console.log('   - Preview:', responseText.substring(0, 150) + (responseText.length > 150 ? '...' : ''));
+            console.log('🤖 ========================================\n');
             
             return responseText;
         } catch (error: any) {
-            console.error('❌ Error sending message to GigaChat:');
-            console.error('📛 Error message:', error.message);
+            console.error('\n❌ ========== GIGACHAT API ERROR ==========');
+            console.error('📛 Error name:', error.name);
+            console.error('📜 Error message:', error.message);
+            console.error('🏷️ Error code:', error.code);
             
             if (error.response) {
                 console.error('📊 Response status:', error.response.status);
@@ -142,18 +224,23 @@ export class GigaChatService {
                 
                 if (error.response.status === 401) {
                     console.log('🔄 Token expired, resetting and retrying...');
-                    // Если токен просрочен, сбрасываем и пробуем еще раз
                     this.accessToken = '';
                     this.tokenExpires = 0;
                     return this.sendMessage(message);
                 } else if (error.response.status === 429) {
+                    console.log('🚫 Rate limit exceeded');
                     return 'Превышен лимит запросов. Попробуйте позже.';
                 }
             } else if (error.request) {
                 console.error('🚫 No response received from GigaChat API');
+                console.error('🔧 Request details:', {
+                    url: error.config?.url,
+                    method: error.config?.method,
+                    timeout: error.config?.timeout
+                });
             }
             
-            console.error('🔧 Error config:', error.config?.url);
+            console.error('❌ =========================================\n');
             return 'Извините, произошла ошибка при обращении к нейросети. Попробуйте позже.';
         }
     }
