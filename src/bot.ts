@@ -232,7 +232,20 @@ bot.command('help', async (ctx) => {
 //************************************************
 
 bot.action('back', async (ctx: any) => {
-  const userId = ctx.message?.from_id || ctx.from?.id || ctx.message?.from?.id || ctx.userId;
+  // Для callback-кнопок структура может быть другой
+  const userId = ctx.message?.sender?.user_id 
+    || ctx.update?.callback_query?.from?.id
+    || ctx.update?.callback_query?.message?.sender?.user_id
+    || ctx.callback_query?.from?.id;
+    
+  // Отладка для callback-кнопок
+  if (!userId) {
+    console.log('\n🔙 ========== CALLBACK DEBUG ==========');
+    console.log('🔍 ctx keys:', Object.keys(ctx).join(', '));
+    console.log('🔍 ctx.update:', ctx.update ? Object.keys(ctx.update).join(', ') : 'undefined');
+    console.log('🔍 ctx.update?.callback_query:', ctx.update?.callback_query ? JSON.stringify(ctx.update.callback_query, null, 2).substring(0, 300) : 'undefined');
+  }
+  
   if (userId) {
     userGigachatMode.set(userId, false);
   }
@@ -259,7 +272,20 @@ bot.action('first_time', async (ctx: any) => {
 
 // НОВЫЙ ОБРАБОТЧИК GIGACHAT
 bot.action('gigachat', async (ctx: any) => {
-  const userId = ctx.message?.from_id || ctx.from?.id || ctx.message?.from?.id || ctx.userId;
+  // Для callback-кнопок структура может быть другой
+  const userId = ctx.message?.sender?.user_id 
+    || ctx.update?.callback_query?.from?.id
+    || ctx.update?.callback_query?.message?.sender?.user_id
+    || ctx.callback_query?.from?.id;
+    
+  // Отладка для callback-кнопок
+  if (!userId) {
+    console.log('\n🎯 ========== CALLBACK DEBUG ==========');
+    console.log('🔍 ctx keys:', Object.keys(ctx).join(', '));
+    console.log('🔍 ctx.update:', ctx.update ? Object.keys(ctx.update).join(', ') : 'undefined');
+    console.log('🔍 ctx.update?.callback_query:', ctx.update?.callback_query ? JSON.stringify(ctx.update.callback_query, null, 2).substring(0, 300) : 'undefined');
+  }
+  
   if (userId) {
     userGigachatMode.set(userId, true);
   }
@@ -276,48 +302,19 @@ bot.action('gigachat', async (ctx: any) => {
 
 // Обработка текстовых сообщений для GigaChat
 bot.on('message_created', async (ctx: any) => {
-  // Выводим полную структуру ctx для отладки
-  console.log('\n📨 ========== NEW MESSAGE ==========');
-  console.log('🔍 Full context structure:');
-  console.log('   - ctx keys:', Object.keys(ctx).join(', '));
-  if (ctx.message) {
-    console.log('   - ctx.message keys:', Object.keys(ctx.message).join(', '));
-    console.log('   - ctx.message full:', JSON.stringify(ctx.message, null, 2).substring(0, 500));
-  }
-  if (ctx.from) {
-    console.log('   - ctx.from keys:', Object.keys(ctx.from).join(', '));
-  }
-  
-  // Пробуем разные варианты получения user ID и текста сообщения
-  const userId = ctx.message?.from_id 
-    || ctx.message?.from?.id 
-    || ctx.message?.user_id
-    || ctx.message?.userId
-    || ctx.from?.id 
-    || ctx.userId
-    || ctx.user_id;
-    
-  const messageText = ctx.message?.text 
-    || ctx.message?.message?.text
-    || ctx.message?.body
-    || ctx.text 
-    || ctx.message?.content;
-    
+  // Получаем user ID и текст сообщения из правильной структуры max-bot-api
+  const userId = ctx.message?.sender?.user_id;
+  const messageText = ctx.message?.body?.text;
   const isGigachatMode = userId ? (userGigachatMode.get(userId) || false) : false;
   
-  console.log('🔍 Trying to extract:');
-  console.log('   - ctx.message?.from_id:', ctx.message?.from_id);
-  console.log('   - ctx.message?.from?.id:', ctx.message?.from?.id);
-  console.log('   - ctx.message?.user_id:', ctx.message?.user_id);
-  console.log('   - ctx.message?.userId:', ctx.message?.userId);
-  console.log('   - ctx.from?.id:', ctx.from?.id);
-  console.log('   - ctx.userId:', ctx.userId);
-  console.log('   - ctx.user_id:', ctx.user_id);
-  console.log('👤 User ID (final):', userId);
-  console.log('💬 Message (final):', messageText);
-  console.log('🔧 GigaChat mode:', isGigachatMode);
-  console.log('🕒 Time:', new Date().toLocaleString());
-  console.log('📨 ================================\n');
+  // Отладочный вывод (можно убрать позже)
+  if (!userId || !messageText) {
+    console.log('\n📨 ========== NEW MESSAGE (DEBUG) ==========');
+    console.log('🔍 ctx.message?.sender:', ctx.message?.sender);
+    console.log('🔍 ctx.message?.body:', ctx.message?.body);
+    console.log('👤 User ID:', userId);
+    console.log('💬 Message:', messageText);
+  }
   
   // Если нет user ID, пропускаем (это может быть системное сообщение)
   if (!userId) {
