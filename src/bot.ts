@@ -1,7 +1,7 @@
 import { Bot } from '@maxhub/max-bot-api';
 import dotenv from 'dotenv';
 import path from 'path';
-import { Keyboard } from '@maxhub/max-bot-api';
+import { keyboard_start }
 
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
@@ -12,13 +12,6 @@ if (!botToken) {
 }
 
 const bot = new Bot(botToken);
-
-const keyboard = Keyboard.inlineKeyboard([
-
-  [
-    Keyboard.button.callback('Помощь❓', 'help')
-  ],
-]);
 
 const startMessage = [
   'Приветствую. Ты здесь впервые?',
@@ -43,12 +36,12 @@ const helpcomand = [
   'Z',
 ].join('\n');
 
-bot.command('start', (ctx: Context) => {
-  ctx.reply(startMessage,{attachments: [keyboard]});
+bot.command('start', async (ctx: Context) => {
+  await ctx.reply(startMessage,{attachments: [keyboard]});
 });
 
 bot.action('help', async (ctx) => {
-  ctx.reply(helpcomand,{attachments: [keyboard]});
+  await ctx.reply(helpcomand,{attachments: [keyboard]});
 });
 
 bot.start();
