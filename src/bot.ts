@@ -13,6 +13,7 @@ import {
 } from './database/userData';
 import { parseSchedule, formatSchedule, listGroups, isParserAvailable } from './parser/scheduleParser';
 import { getUserState, setUserState, clearUserState } from './utils/userStates';
+import { universityNameToSlug, getPopularUniversities, findSimilarUniversities } from './utils/universityMapper';
 // НЕ импортируем gigaChatService здесь, так как .env еще не загружен
 // Импортируем после загрузки .env
 
@@ -254,6 +255,7 @@ bot.action('back', async (ctx: any) => {
     || ctx.callback_query?.from?.id
     || ctx.message?.recipient?.user_id  // ВАЖНО: recipient, а не sender!
     || ctx.update?.callback_query?.message?.sender?.user_id;
+  const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
   
   if (userId) {
     userGigachatMode.set(userId, false);
@@ -264,24 +266,29 @@ bot.action('back', async (ctx: any) => {
   console.log('🔧 Setting GigaChat mode: false');
   console.log('🔙 =======================================\n');
   
-  await ctx.reply(mainmenu,{attachments: [keyboard_mainmenu]});
+  await ctx.api.sendMessageToChat(chatId, mainmenu, { attachments: [keyboard_mainmenu] });
 });
 
 bot.action('help', async (ctx: any) => {
-  await ctx.reply(helpcomand,{attachments: [keyboard_helpmenu]});
+  const userId = ctx.update?.callback_query?.from?.id || ctx.message?.recipient?.user_id;
+  const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
+  await ctx.api.sendMessageToChat(chatId, helpcomand, { attachments: [keyboard_helpmenu] });
 });
 
 bot.action('schedule', async (ctx: any) => {
   const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
+  const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
   
   if (!userId) {
-    await ctx.reply('Не удалось определить пользователя', { attachments: [keyboard_mainmenu] });
+    await ctx.api.sendMessageToChat(chatId, 'Не удалось определить пользователя', {
+      attachments: [keyboard_mainmenu]
+    });
     return;
   }
   
   // Проверяем наличие парсера
   if (!isParserAvailable()) {
-    await ctx.reply(
+    await ctx.api.sendMessageToChat(chatId,
       '❌ Парсер расписания недоступен.\n\n' +
       'Убедитесь, что директория parser/ находится в проекте и содержит parser.py',
       { attachments: [keyboard_mainmenu] }
@@ -292,7 +299,7 @@ bot.action('schedule', async (ctx: any) => {
   const userData = getUserData(userId);
   
   if (!hasCompleteUserData(userId)) {
-    await ctx.reply(
+    await ctx.api.sendMessageToChat(chatId,
       '❌ Расписание не настроено.\n\n' +
       'Для начала настройте расписание:\n' +
       '1. Укажите университет (slug)\n' +
@@ -308,7 +315,9 @@ bot.action('schedule', async (ctx: any) => {
   
   if (!scheduleData) {
     // Парсим расписание
-    await ctx.reply('⏳ Загружаю расписание...', { attachments: [keyboard_mainmenu] });
+    await ctx.api.sendMessageToChat(chatId, '⏳ Загружаю расписание...', {
+      attachments: [keyboard_mainmenu]
+    });
     
     const result = await parseSchedule({
       slug: userData!.university!,
@@ -316,7 +325,7 @@ bot.action('schedule', async (ctx: any) => {
     });
     
     if (!result.success) {
-      await ctx.reply(
+      await ctx.api.sendMessageToChat(chatId, 
         `❌ Ошибка при загрузке расписания:\n${result.error}\n\nПроверьте правильность указанных данных.`,
         { attachments: [keyboard_mainmenu] }
       );
@@ -334,21 +343,31 @@ bot.action('schedule', async (ctx: any) => {
   if (formatted.length > 4096) {
     const chunks = formatted.match(/[\s\S]{1,4000}/g) || [];
     for (let i = 0; i < chunks.length; i++) {
-      await ctx.reply(chunks[i], {
-        attachments: i === chunks.length - 1 ? keyboard_mainmenu : undefined
-      });
+      if (i === chunks.length - 1) {
+        // Последний chunk с клавиатурой - используем sendMessageToChat
+        await ctx.api.sendMessageToChat(chatId, chunks[i], {
+          attachments: [keyboard_mainmenu]
+        });
+      } else {
+        // Промежуточные chunks без клавиатуры
+        await ctx.api.sendMessageToChat(chatId, chunks[i]);
+      }
     }
   } else {
-    await ctx.reply(formatted, { attachments: [keyboard_mainmenu] });
+    // Отправляем с клавиатурой - используем sendMessageToChat
+    await ctx.api.sendMessageToChat(chatId, formatted, {
+      attachments: [keyboard_mainmenu]
+    });
   }
 });
 
 bot.action('first_time', async (ctx: any) => {
   const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
+  const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
   
   // Проверяем наличие парсера
   if (!isParserAvailable()) {
-    await ctx.reply(
+    await ctx.api.sendMessageToChat(chatId,
       '❌ Парсер расписания недоступен.\n\n' +
       'Убедитесь, что директория parser/ находится в проекте и содержит parser.py',
       { attachments: [keyboard_mainmenu] }
@@ -359,7 +378,16 @@ bot.action('first_time', async (ctx: any) => {
   if (userId) {
     setUserState(userId, 'waiting_university');
   }
-  await ctx.reply('Введите идентификатор вашего университета (например: togu, pskovgu, petrsu):\n\n💡 Список доступных вузов можно найти на dnevuch.ru');
+  
+  const popular = getPopularUniversities();
+  const popularList = popular.map(u => `• ${u.name}`).join('\n');
+  
+  await ctx.api.sendMessageToChat(chatId,
+    'Введите название вашего университета:\n\n' +
+    '📚 Примеры популярных вузов:\n' +
+    popularList +
+    '\n\n💡 Можно вводить как полное название (ТОГУ, МГУ), так и сокращение (togu, msu)'
+  );
 });
 
 // НОВЫЙ ОБРАБОТЧИК GIGACHAT
@@ -372,6 +400,7 @@ bot.action('gigachat', async (ctx: any) => {
     || ctx.callback_query?.from?.id
     || ctx.message?.recipient?.user_id  // ВАЖНО: recipient, а не sender!
     || ctx.update?.callback_query?.message?.sender?.user_id;
+  const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
   
   if (userId) {
     userGigachatMode.set(userId, true);
@@ -383,7 +412,7 @@ bot.action('gigachat', async (ctx: any) => {
   console.log('🔧 Setting GigaChat mode: true');
   console.log('🎯 ===========================================\n');
   
-  await ctx.reply(gigachatWelcome, { attachments: [keyboard_gigachat] });
+  await ctx.api.sendMessageToChat(chatId, gigachatWelcome, { attachments: [keyboard_gigachat] });
 });
 
 
@@ -423,13 +452,46 @@ bot.on('message_created', async (ctx: any) => {
   const userState = getUserState(userId);
   
   if (userState === 'waiting_university') {
-    // Пользователь вводит университет (slug)
-    const university = messageText.trim().toLowerCase();
-    setUserUniversity(userId, university);
+    // Пользователь вводит название университета
+    const universityName = messageText.trim();
+    
+    // Преобразуем название в slug
+    const slug = universityNameToSlug(universityName);
+    
+    if (!slug) {
+      // Пробуем найти похожие
+      const similar = findSimilarUniversities(universityName);
+      
+      if (similar.length > 0) {
+        const similarList = similar.map(u => `• ${u.name} (${u.slug})`).join('\n');
+        await ctx.reply(
+          `❌ Университет "${universityName}" не найден.\n\n` +
+          `💡 Возможно, вы имели в виду:\n${similarList}\n\n` +
+          `Попробуйте ввести одно из предложенных названий или slug.`,
+          { attachments: [keyboard_mainmenu] }
+        );
+      } else {
+        await ctx.reply(
+          `❌ Университет "${universityName}" не найден.\n\n` +
+          `💡 Попробуйте ввести:\n` +
+          `• Полное название (например: ТОГУ, МГУ)\n` +
+          `• Или slug (например: togu, msu)\n\n` +
+          `Список доступных вузов: dnevuch.ru`,
+          { attachments: [keyboard_mainmenu] }
+        );
+      }
+      return;
+    }
+    
+    // Находим человекочитаемое название для отображения
+    const popular = getPopularUniversities().find(u => u.slug === slug);
+    const displayName = popular ? popular.name : slug.toUpperCase();
+    
+    setUserUniversity(userId, slug);
     setUserState(userId, 'waiting_group');
     
     await ctx.reply(
-      `✅ Университет сохранен: ${university}\n\n` +
+      `✅ Университет сохранен: ${displayName} (${slug})\n\n` +
       `Теперь введите название вашей группы:`,
       { attachments: [keyboard_mainmenu] }
     );
