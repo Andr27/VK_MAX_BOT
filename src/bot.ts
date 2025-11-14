@@ -11,7 +11,7 @@ if (!botToken) {
   throw new Error('BOT_TOKEN не найден. Добавьте его в .env');
 }
 
-GigachatBool = true
+let GigachatBool:boolean = true;
 
 const bot = new Bot(botToken);
 
@@ -105,11 +105,13 @@ const unknown = [
 //********ИНИЦИАЛИЗАЦИЯ КОМАНД ЧЕРЕЗ SLASH*************
 //************************************************
 
-bot.command('start', async (ctx: Context) => {
+bot.command('start', async (ctx) => {
+  // @ts-ignore
   await ctx.reply(startMessage,{attachments: [keyboard_start]});
 });
 
-bot.command('help', async (ctx: Context) => {
+bot.command('help', async (ctx) => {
+  // @ts-ignore
   await ctx.reply(helpcomand,{attachments: [keyboard_helpmenu]});
 });
 
@@ -117,25 +119,30 @@ bot.command('help', async (ctx: Context) => {
 //********ИНИЦИАЛИЗАЦИЯ INLINE КНОПОК*************
 //************************************************
 
-bot.action('back', async (ctx: Context) => {
+bot.action('back', async (ctx) => {
+  // @ts-ignore
   await ctx.reply(mainmenu,{attachments: [keyboard_mainmenu]});
 });
 
 bot.action('help', async (ctx) => {
+  // @ts-ignore
   await ctx.reply(helpcomand,{attachments: [keyboard_helpmenu]});
 });
 
 bot.action('schedule', async (ctx) => {
+  // @ts-ignore
   await ctx.reply(schedule,{attachments: [keyboard_helpmenu]});
 });
 
 bot.action('gigachat', async (ctx) => {
+  // @ts-ignore
   await ctx.reply(gigachat,{attachments: [keyboard_helpmenu]});
 });
 
 //Обработчик неизвестных команд
 if (GigachatBool == true) {
   bot.on('message_created', async (ctx) => {
+    // @ts-ignore
     await ctx.reply(unknown, {attachments: [keyboard_unknown]});
   });
 } else {
