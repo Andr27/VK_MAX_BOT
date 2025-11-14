@@ -345,8 +345,8 @@ bot.action('schedule', async (ctx: any) => {
     cacheSchedule(userId, scheduleData);
   }
   
-  // Форматируем и отправляем расписание (только 2 дня)
-  const formatted = formatSchedule(scheduleData, undefined, 2);
+  // Форматируем и отправляем расписание (вчера, сегодня и завтра - 3 дня)
+  const formatted = formatSchedule(scheduleData, undefined, 3);
   
   // Разбиваем на части, если слишком длинное
   if (formatted.length > 4096) {
@@ -363,7 +363,7 @@ bot.action('schedule', async (ctx: any) => {
       }
     }
   } else {
-    // Отправляем с клавиатурой (2 дня + кнопка "на неделю")
+    // Отправляем с клавиатурой (3 дня + кнопка "на неделю")
     await ctx.api.sendMessageToChat(chatId, formatted, {
       attachments: [keyboard_schedule_short]
     });
@@ -418,8 +418,8 @@ bot.action('schedule_week', async (ctx: any) => {
     cacheSchedule(userId, scheduleData);
   }
   
-  // Форматируем полное расписание (без ограничения дней)
-  const formatted = formatSchedule(scheduleData);
+  // Форматируем расписание на неделю (7 дней)
+  const formatted = formatSchedule(scheduleData, undefined, 7);
   
   // Разбиваем на части, если слишком длинное
   if (formatted.length > 4096) {
