@@ -2,6 +2,7 @@ import { Bot } from '@maxhub/max-bot-api';
 import dotenv from 'dotenv';
 import path from 'path';
 import { Keyboard } from '@maxhub/max-bot-api';
+import { gigaChatService } from './utils/gigachat';
 
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
@@ -11,7 +12,8 @@ if (!botToken) {
   throw new Error('BOT_TOKEN не найден. Добавьте его в .env');
 }
 
-let GigachatBool:boolean = false;
+// Храним состояния для каждого пользователя
+const userGigachatMode = new Map<number, boolean>();
 
 const bot = new Bot(botToken);
 
@@ -20,7 +22,6 @@ const bot = new Bot(botToken);
 //*****************************
 
 const keyboard_start = Keyboard.inlineKeyboard([
-
   [
     Keyboard.button.callback('Начать', 'first_time')
   ],
@@ -38,8 +39,13 @@ const keyboard_mainmenu = Keyboard.inlineKeyboard([
 
 const keyboard_helpmenu = Keyboard.inlineKeyboard([
   [
-    Keyboard.button.callback('Помощь❓', 'help'),
     Keyboard.button.callback('🔙Назад', 'back'),
+  ],
+]);
+
+const keyboard_gigachat = Keyboard.inlineKeyboard([
+  [
+    Keyboard.button.callback('🔙 В главное меню', 'back')
   ],
 ]);
 
@@ -75,7 +81,7 @@ const mainmenu = [
 const helpcomand = [
   '/start - стартовая программа',
   '/help - помощь',
-  '/расписание' +
+  '/расписание',
   '',
 ].join('\n');
 
@@ -83,15 +89,24 @@ const schedule = [
   'Расписание типа',
 ].join('\n');
 
-const gigachat = [
-  'GigaChat типа',
+const gigachatWelcome = [
+  '🤖 Добро пожаловать в чат с GigaChat!',
+  '',
+  'Задайте любой вопрос нейросети:',
+  '• Объяснение сложных тем',
+  '• Помощь с домашними заданиями', 
+  '• Разбор теорий и концепций',
+  '• Решение задач',
+  '• И многое другое...',
+  '',
+  'Просто напишите ваш вопрос в чат!',
+  'Для возврата в главное меню нажмите кнопку ниже 👇'
 ].join('\n');
 
 const unknown = [
   'Возможно, я вас не правильно понял, повторите свой запрос!',
   'Либо воспользуйтесь меню "Помощь❓"'
 ].join('\n');
-
 
 //************************************************
 //********ИНИЦИАЛИЗАЦИЯ КОМАНД ЧЕРЕЗ SLASH*************
@@ -112,6 +127,8 @@ bot.command('help', async (ctx) => {
 //************************************************
 
 bot.action('back', async (ctx: any) => {
+  const userId = ctx.message.from_id;
+  userGigachatMode.set(userId, false);
   await ctx.reply(mainmenu,{attachments: [keyboard_mainmenu]});
 });
 
@@ -120,61 +137,41 @@ bot.action('help', async (ctx: any) => {
 });
 
 bot.action('schedule', async (ctx: any) => {
-  await ctx.reply(schedule,{attachments: [keyboard_helpmenu]});
+  await ctx.reply(schedule,{attachments: [keyboard_mainmenu]});
 });
 
 bot.action('first_time', async (ctx: any) => {
   await ctx.reply('Введите свой университет:');
 });
-const keyboard_gigachat = Keyboard.inlineKeyboard([
-    [
-        Keyboard.button.callback('🔙 В главное меню', 'backtomenu')
-    ],
-]);
-//Обработчик неизвестных команд
-if (GigachatBool == false) {
-  bot.on('message_created', async (ctx: any) => {
-    await ctx.reply(unknown);
-    await ctx.reply(mainmenu,{attachments: [keyboard_mainmenu]});
-  });
-} else {
-  // код для случая, когда GigachatBool false
-}
+
 // НОВЫЙ ОБРАБОТЧИК GIGACHAT
-bot.action('gigachat', async (ctx:any) => {
+bot.action('gigachat', async (ctx: any) => {
   const userId = ctx.message.from_id;
-  GigachatBool = true;
-  const gigachatWelcome = [
-    '🤖 Добро пожаловать в чат с GigaChat!',
-    '',
-    'Задайте любой вопрос нейросети:',
-    '• Объяснение сложных тем',
-    '• Помощь с домашними заданиями', 
-    '• Разбор теорий и концепций',
-    '• Решение задач',
-    '• И многое другое...',
-    '',
-    'Просто напишите ваш вопрос в чат!',
-    'Для возврата в главное меню нажмите кнопку ниже 👇'
-  ].join('\n');
+  userGigachatMode.set(userId, true);
   
-  await ctx.reply(gigachatWelcome, { keyboard: keyboard_gigachat });
+  await ctx.reply(gigachatWelcome, { attachments: [keyboard_gigachat] });
 });
 
 // Обработка текстовых сообщений для GigaChat
-bot.on('message_callback', async (ctx: any) => {
+bot.on('message_created', async (ctx: any) => {
   const userId = ctx.message.from_id;
   const messageText = ctx.message.text;
+  const isGigachatMode = userGigachatMode.get(userId) || false;
   
   // Пропускаем команды
   if (messageText?.startsWith('/')) {
     return;
   }
   
-  // Если пользователь в режиме GigaChat и это не команда
-  if (GigachatBool == true && messageText && !messageText.startsWith('/')) {
+  // Если это не текст сообщения (например, callback)
+  if (!messageText) {
+    return;
+  }
+  
+  // Если пользователь в режиме GigaChat
+  if (isGigachatMode) {
     // Показываем, что бот думает
-    await ctx.reply('🤔 Думаю...', { keyboard: keyboard_gigachat });
+    await ctx.reply('🤔 Думаю...', { attachments: [keyboard_gigachat] });
     
     try {
       // Отправляем запрос в GigaChat
@@ -185,21 +182,27 @@ bot.on('message_callback', async (ctx: any) => {
         const chunks = response.match(/[\s\S]{1,4096}/g) || [];
         for (let i = 0; i < chunks.length; i++) {
           await ctx.reply(chunks[i], { 
-            keyboard: i === chunks.length - 1 ? keyboard_gigachat : undefined 
+            attachments: i === chunks.length - 1 ? keyboard_gigachat : undefined 
           });
         }
       } else {
-        await ctx.reply(response, { keyboard: keyboard_gigachat });
+        await ctx.reply(response, { attachments: [keyboard_gigachat] });
       }
       
     } catch (error) {
       console.error('GigaChat error:', error);
       await ctx.reply(
         '⚠️ Произошла ошибка при обращении к нейросети. Попробуйте еще раз.', 
-        { keyboard: keyboard_gigachat }
+        { attachments: [keyboard_gigachat] }
       );
+    }
+  } else {
+    // Если не в режиме GigaChat и неизвестная команда
+    if (messageText !== '/start' && messageText !== '/help') {
+      await ctx.reply(unknown);
+      await ctx.reply(mainmenu,{attachments: [keyboard_mainmenu]});
     }
   }
 });
-bot.start();
 
+bot.start();
