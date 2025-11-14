@@ -172,6 +172,15 @@ const keyboard_gigachat = Keyboard.inlineKeyboard([
   ],
 ]);
 
+const keyboard_schedule_short = Keyboard.inlineKeyboard([
+  [
+    Keyboard.button.callback('📅 Расписание на неделю', 'schedule_week')
+  ],
+  [
+    Keyboard.button.callback('🔙 В главное меню', 'back')
+  ],
+]);
+
 //*****************************
 //********ТЕКСТИКИ*************
 //*****************************
@@ -336,7 +345,80 @@ bot.action('schedule', async (ctx: any) => {
     cacheSchedule(userId, scheduleData);
   }
   
-  // Форматируем и отправляем расписание
+  // Форматируем и отправляем расписание (только 2 дня)
+  const formatted = formatSchedule(scheduleData, undefined, 2);
+  
+  // Разбиваем на части, если слишком длинное
+  if (formatted.length > 4096) {
+    const chunks = formatted.match(/[\s\S]{1,4000}/g) || [];
+    for (let i = 0; i < chunks.length; i++) {
+      if (i === chunks.length - 1) {
+        // Последний chunk с клавиатурой
+        await ctx.api.sendMessageToChat(chatId, chunks[i], {
+          attachments: [keyboard_schedule_short]
+        });
+      } else {
+        // Промежуточные chunks без клавиатуры
+        await ctx.api.sendMessageToChat(chatId, chunks[i]);
+      }
+    }
+  } else {
+    // Отправляем с клавиатурой (2 дня + кнопка "на неделю")
+    await ctx.api.sendMessageToChat(chatId, formatted, {
+      attachments: [keyboard_schedule_short]
+    });
+  }
+});
+
+// Обработчик для показа полного расписания на неделю
+bot.action('schedule_week', async (ctx: any) => {
+  const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
+  const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
+  
+  if (!userId) {
+    await ctx.api.sendMessageToChat(chatId, 'Не удалось определить пользователя', {
+      attachments: [keyboard_mainmenu]
+    });
+    return;
+  }
+  
+  const userData = getUserData(userId);
+  
+  if (!hasCompleteUserData(userId)) {
+    await ctx.api.sendMessageToChat(chatId,
+      '❌ Расписание не настроено.',
+      { attachments: [keyboard_mainmenu] }
+    );
+    return;
+  }
+  
+  // Получаем расписание из кэша
+  let scheduleData = getCachedSchedule(userId);
+  
+  if (!scheduleData) {
+    // Если кэша нет, парсим заново
+    await ctx.api.sendMessageToChat(chatId, '⏳ Загружаю расписание...', {
+      attachments: [keyboard_mainmenu]
+    });
+    
+    const result = await parseSchedule({
+      slug: userData!.university!,
+      group: userData!.group!
+    });
+    
+    if (!result.success) {
+      await ctx.api.sendMessageToChat(chatId, 
+        `❌ Ошибка при загрузке расписания:\n${result.error}`,
+        { attachments: [keyboard_mainmenu] }
+      );
+      return;
+    }
+    
+    scheduleData = result.schedule;
+    cacheSchedule(userId, scheduleData);
+  }
+  
+  // Форматируем полное расписание (без ограничения дней)
   const formatted = formatSchedule(scheduleData);
   
   // Разбиваем на части, если слишком длинное
@@ -344,7 +426,7 @@ bot.action('schedule', async (ctx: any) => {
     const chunks = formatted.match(/[\s\S]{1,4000}/g) || [];
     for (let i = 0; i < chunks.length; i++) {
       if (i === chunks.length - 1) {
-        // Последний chunk с клавиатурой - используем sendMessageToChat
+        // Последний chunk с клавиатурой
         await ctx.api.sendMessageToChat(chatId, chunks[i], {
           attachments: [keyboard_mainmenu]
         });
@@ -354,7 +436,7 @@ bot.action('schedule', async (ctx: any) => {
       }
     }
   } else {
-    // Отправляем с клавиатурой - используем sendMessageToChat
+    // Отправляем полное расписание с клавиатурой
     await ctx.api.sendMessageToChat(chatId, formatted, {
       attachments: [keyboard_mainmenu]
     });

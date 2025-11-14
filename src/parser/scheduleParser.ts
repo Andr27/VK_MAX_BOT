@@ -161,26 +161,29 @@ export async function parseSchedule(options: ParseScheduleOptions): Promise<Pars
 
 /**
  * Форматирует расписание для отправки пользователю
+ * @param schedule - данные расписания
+ * @param date - опциональная дата
+ * @param daysLimit - ограничение на количество дней (если не указано, показываются все дни)
  */
-export function formatSchedule(schedule: any, date?: string): string {
+export function formatSchedule(schedule: any, date?: string, daysLimit?: number): string {
     if (!schedule) {
         return 'Расписание не найдено';
     }
     
     // Если это формат TOGU (с days)
     if (schedule.days && Array.isArray(schedule.days)) {
-        return formatToguSchedule(schedule, date);
+        return formatToguSchedule(schedule, date, daysLimit);
     }
     
     // Если это формат dnevuch (массив массивов)
     if (Array.isArray(schedule) && schedule.length > 0) {
-        return formatDnevuchSchedule(schedule, date);
+        return formatDnevuchSchedule(schedule, date, daysLimit);
     }
     
     return 'Неизвестный формат расписания';
 }
 
-function formatToguSchedule(schedule: any, date?: string): string {
+function formatToguSchedule(schedule: any, date?: string, daysLimit?: number): string {
     let result = `📅 Расписание: ${schedule.group || 'Неизвестная группа'}\n\n`;
     
     if (schedule.source) {
@@ -188,8 +191,14 @@ function formatToguSchedule(schedule: any, date?: string): string {
     }
     
     const days = schedule.days || [];
+    const daysToShow = daysLimit ? days.slice(0, daysLimit) : days;
     
-    for (const day of days) {
+    // Если показываем ограниченное количество дней, добавляем информацию
+    if (daysLimit && days.length > daysLimit) {
+        result += `📆 Показано ${daysLimit} из ${days.length} дней\n\n`;
+    }
+    
+    for (const day of daysToShow) {
         if (!day.lessons || day.lessons.length === 0) {
             continue;
         }
@@ -241,11 +250,18 @@ function formatToguSchedule(schedule: any, date?: string): string {
     return result;
 }
 
-function formatDnevuchSchedule(schedule: any[], date?: string): string {
+function formatDnevuchSchedule(schedule: any[], date?: string, daysLimit?: number): string {
     let result = '📅 Расписание\n\n';
     
+    const daysToShow = daysLimit ? schedule.slice(0, daysLimit) : schedule;
+    
+    // Если показываем ограниченное количество дней, добавляем информацию
+    if (daysLimit && schedule.length > daysLimit) {
+        result += `📆 Показано ${daysLimit} из ${schedule.length} дней\n\n`;
+    }
+    
     // schedule - это массив массивов, где каждый внутренний массив - это день
-    for (const daySchedule of schedule) {
+    for (const daySchedule of daysToShow) {
         if (!Array.isArray(daySchedule) || daySchedule.length === 0) {
             continue;
         }
