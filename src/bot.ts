@@ -130,6 +130,12 @@ bot.command('help', async (ctx) => {
 bot.action('back', async (ctx: any) => {
   const userId = ctx.message.from_id;
   userGigachatMode.set(userId, false);
+  
+  console.log('\n🔙 ========== RETURN TO MAIN MENU ==========');
+  console.log('👤 User ID:', userId);
+  console.log('🔧 Setting GigaChat mode: false');
+  console.log('🔙 =======================================\n');
+  
   await ctx.reply(mainmenu,{attachments: [keyboard_mainmenu]});
 });
 
@@ -150,11 +156,14 @@ bot.action('gigachat', async (ctx: any) => {
   const userId = ctx.message.from_id;
   userGigachatMode.set(userId, true);
   
-  console.log(`🎯 User ${userId} entered GigaChat mode`);
+  console.log('\n🎯 ========== GIGACHAT MODE ACTIVATED ==========');
+  console.log('👤 User ID:', userId);
+  console.log('🕒 Time:', new Date().toLocaleString());
+  console.log('🔧 Setting GigaChat mode: true');
+  console.log('🎯 ===========================================\n');
   
   await ctx.reply(gigachatWelcome, { attachments: [keyboard_gigachat] });
 });
-
 
 
 // Обработка текстовых сообщений для GigaChat
@@ -162,6 +171,13 @@ bot.on('message_created', async (ctx: any) => {
   const userId = ctx.message.from_id;
   const messageText = ctx.message.text;
   const isGigachatMode = userGigachatMode.get(userId) || false;
+  
+  console.log('\n📨 ========== NEW MESSAGE ==========');
+  console.log('👤 User ID:', userId);
+  console.log('💬 Message:', messageText);
+  console.log('🔧 GigaChat mode:', isGigachatMode);
+  console.log('🕒 Time:', new Date().toLocaleString());
+  console.log('📨 ================================\n');
   
   // Пропускаем команды
   if (messageText?.startsWith('/')) {
