@@ -4,3 +4,11 @@ node_modules/.env
 *.log
 .env
 data/
+
+# Python парсер - временные файлы
+parser/__pycache__/
+parser/**/__pycache__/
+parser/*.html
+parser/tmp*.html
+parser/temp_schedule.json
+parser/groups_debug.txt

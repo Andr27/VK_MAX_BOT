@@ -7,18 +7,30 @@ const execAsync = promisify(exec);
 
 // Путь к Python парсеру (пробуем несколько вариантов)
 function findParserScript(): string | null {
-    // Вариант 1: относительно текущего файла (в dev и production)
-    const path1 = path.resolve(__dirname, '../../../parser/parser.py');
-    // Вариант 2: относительно корня проекта
-    const path2 = path.resolve(process.cwd(), 'parser/parser.py');
-    // Вариант 3: если process.cwd() указывает на src/, поднимаемся на уровень выше
-    const path3 = path.resolve(process.cwd(), '../parser/parser.py');
+    // Вариант 1: относительно текущего файла (в dev: src/parser -> ../parser)
+    const path1 = path.resolve(__dirname, '../parser/parser.py');
+    // Вариант 2: относительно текущего файла (в production: dist/parser -> ../../parser)
+    const path2 = path.resolve(__dirname, '../../parser/parser.py');
+    // Вариант 3: относительно корня проекта VK_MAX_BOT
+    const path3 = path.resolve(process.cwd(), 'parser/parser.py');
+    // Вариант 4: если process.cwd() указывает на src/, поднимаемся на уровень выше
+    const path4 = path.resolve(process.cwd(), '../parser/parser.py');
+    // Вариант 5: старый путь (на случай если парсер в корневой папке VK_MAX_BOT)
+    const path5 = path.resolve(__dirname, '../../../parser/parser.py');
     
-    for (const parserPath of [path1, path2, path3]) {
+    for (const parserPath of [path1, path2, path3, path4, path5]) {
         if (fs.existsSync(parserPath)) {
+            console.log(`✅ Парсер найден: ${parserPath}`);
             return parserPath;
         }
     }
+    
+    console.warn('⚠️ Парсер не найден. Проверенные пути:');
+    console.warn(`  1. ${path1}`);
+    console.warn(`  2. ${path2}`);
+    console.warn(`  3. ${path3}`);
+    console.warn(`  4. ${path4}`);
+    console.warn(`  5. ${path5}`);
     
     return null;
 }
@@ -94,7 +106,7 @@ export async function parseSchedule(options: ParseScheduleOptions): Promise<Pars
     try {
         // Определяем директорию парсера
         const parserDir = path.dirname(PARSER_SCRIPT!);
-        // Создаем временный файл для результата
+        // Создаем временный файл для результата в директории парсера
         const tempFile = path.resolve(parserDir, 'temp_schedule.json');
         
         // Запускаем парсер
