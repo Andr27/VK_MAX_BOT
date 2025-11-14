@@ -21,30 +21,19 @@ import { parseDeadlineFromText } from './utils/deadlineParser';
 import { parseSchedule, formatSchedule, listGroups, isParserAvailable } from './parser/scheduleParser';
 import { getUserState, setUserState, clearUserState } from './utils/userStates';
 import { universityNameToSlug, getPopularUniversities, findSimilarUniversities } from './utils/universityMapper';
-// НЕ импортируем gigaChatService здесь, так как .env еще не загружен
-// Импортируем после загрузки .env
 
-
-// Загружаем .env из корня проекта (работает и в dev, и в production)
-// Пробуем несколько путей для надежности
 let envPath: string | null = null;
 
-// Вариант 1: относительно __dirname (когда запускается из src/)
 const path1 = path.resolve(__dirname, '..', '.env');
-// Вариант 2: относительно process.cwd() (когда запускается из корня проекта)
 const path2 = path.resolve(process.cwd(), '.env');
-// Вариант 3: если process.cwd() указывает на src/, поднимаемся на уровень выше
 const path3 = path.resolve(process.cwd(), '..', '.env');
-// Вариант 4: ищем package.json и берем .env из той же директории
 let path4: string | null = null;
 try {
     const packageJsonPath = require.resolve('../package.json');
     path4 = path.resolve(path.dirname(packageJsonPath), '.env');
 } catch (e) {
-    // package.json не найден, пропускаем этот вариант
 }
 
-// Проверяем, какой путь существует
 const pathsToCheck = [path1, path2, path3, path4].filter(p => p !== null) as string[];
 for (const p of pathsToCheck) {
     if (fs.existsSync(p)) {
@@ -53,51 +42,34 @@ for (const p of pathsToCheck) {
     }
 }
 
-// Если ни один путь не найден, используем путь относительно __dirname по умолчанию
 if (!envPath) {
     envPath = path1;
 }
 
-console.log('📁 Trying to load .env from:');
-console.log('   1. ', path1, fs.existsSync(path1) ? '✅ EXISTS' : '❌ NOT FOUND');
-console.log('   2. ', path2, fs.existsSync(path2) ? '✅ EXISTS' : '❌ NOT FOUND');
-console.log('   3. ', path3, fs.existsSync(path3) ? '✅ EXISTS' : '❌ NOT FOUND');
 if (path4) {
     console.log('   4. ', path4, fs.existsSync(path4) ? '✅ EXISTS' : '❌ NOT FOUND');
 }
-console.log('📁 Selected path:', envPath);
-console.log('📁 File exists:', fs.existsSync(envPath));
-console.log('📁 Current working directory:', process.cwd());
-console.log('📁 __dirname:', __dirname);
 
 // Загружаем .env
 const result = dotenv.config({ path: envPath });
 if (result.error) {
     console.error('❌ Error loading .env:', result.error.message);
 } else {
-    console.log('✅ .env loaded successfully from:', envPath);
-    console.log('📋 Parsed variables from .env:', result.parsed ? Object.keys(result.parsed).join(', ') : 'none');
-    console.log('📋 Loaded environment variables:');
-    console.log('   - BOT_TOKEN:', process.env.BOT_TOKEN ? `✅ (length: ${process.env.BOT_TOKEN.length})` : '❌ NOT FOUND');
-    console.log('   - GIGACHAT_CREDENTIALS:', process.env.GIGACHAT_CREDENTIALS ? `✅ (length: ${process.env.GIGACHAT_CREDENTIALS.length})` : '❌ NOT FOUND');
-    
-    // Показываем первые и последние символы для проверки (безопасно)
+
     if (process.env.BOT_TOKEN) {
         console.log('   - BOT_TOKEN preview:', process.env.BOT_TOKEN.substring(0, 10) + '...' + process.env.BOT_TOKEN.substring(process.env.BOT_TOKEN.length - 10));
     }
     if (process.env.GIGACHAT_CREDENTIALS) {
         console.log('   - GIGACHAT_CREDENTIALS preview:', process.env.GIGACHAT_CREDENTIALS.substring(0, 20) + '...' + process.env.GIGACHAT_CREDENTIALS.substring(process.env.GIGACHAT_CREDENTIALS.length - 10));
     }
-    
-    // Показываем все переменные окружения, начинающиеся с BOT_ или GIGA
+
     const envKeys = Object.keys(process.env).filter(key => 
         key.includes('BOT') || key.includes('GIGA') || key.includes('TOKEN') || key.includes('CREDENTIALS')
     );
     if (envKeys.length > 0) {
         console.log('🔍 Found related env vars:', envKeys.join(', '));
     }
-    
-    // Проверяем, что файл .env читается правильно
+
     try {
         const envContent = fs.readFileSync(envPath, 'utf8');
         const lines = envContent.split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
@@ -116,10 +88,8 @@ if (result.error) {
 const botToken = process.env.BOT_TOKEN;
 const gigachatCredentials = process.env.GIGACHAT_CREDENTIALS;
 
-// Импортируем gigaChatService ПОСЛЕ загрузки .env
 const { gigaChatService } = require('./utils/gigachat');
 
-// Обновляем credentials в GigaChatService после загрузки .env
 if (gigachatCredentials) {
     gigaChatService.updateCredentials();
 }
@@ -128,21 +98,6 @@ if (!botToken) {
   throw new Error('BOT_TOKEN не найден. Добавьте его в .env');
 }
 
-if (!gigachatCredentials) {
-  console.warn('⚠️ GIGACHAT_CREDENTIALS не найден. Функция GigaChat будет недоступна.');
-  console.warn('💡 Для работы GigaChat добавьте GIGACHAT_CREDENTIALS в .env файл');
-  console.warn('💡 Получите Client ID и Client Secret в личном кабинете GigaChat API');
-  console.warn('💡 Закодируйте их в Base64 в формате "Client ID:Client Secret"');
-}
-
-// Проверяем наличие парсера
-if (!isParserAvailable()) {
-  console.warn('⚠️ Python парсер не найден. Функция расписания будет недоступна.');
-  console.warn('💡 Убедитесь, что директория parser/ находится в корне проекта');
-  console.warn('💡 И что файл parser/parser.py существует');
-}
-
-// Храним состояния для каждого пользователя
 const userGigachatMode = new Map<number, boolean>();
 
 const bot = new Bot(botToken);
@@ -308,8 +263,7 @@ bot.action('schedule', async (ctx: any) => {
     });
     return;
   }
-  
-  // Проверяем наличие парсера
+
   if (!isParserAvailable()) {
     await ctx.api.sendMessageToChat(chatId,
       '❌ Парсер расписания недоступен.\n\n' +
@@ -332,12 +286,10 @@ bot.action('schedule', async (ctx: any) => {
     );
     return;
   }
-  
-  // Проверяем кэш
+
   let scheduleData = getCachedSchedule(userId);
   
   if (!scheduleData) {
-    // Парсим расписание
     await ctx.api.sendMessageToChat(chatId, '⏳ Загружаю расписание...', {
       attachments: [keyboard_mainmenu]
     });
@@ -358,33 +310,27 @@ bot.action('schedule', async (ctx: any) => {
     scheduleData = result.schedule;
     cacheSchedule(userId, scheduleData);
   }
-  
-  // Форматируем и отправляем расписание (вчера, сегодня и завтра - 3 дня)
+
   const formatted = formatSchedule(scheduleData, undefined, 3);
-  
-  // Разбиваем на части, если слишком длинное
+
   if (formatted.length > 4096) {
     const chunks = formatted.match(/[\s\S]{1,4000}/g) || [];
     for (let i = 0; i < chunks.length; i++) {
       if (i === chunks.length - 1) {
-        // Последний chunk с клавиатурой
         await ctx.api.sendMessageToChat(chatId, chunks[i], {
           attachments: [keyboard_schedule_short]
         });
       } else {
-        // Промежуточные chunks без клавиатуры
         await ctx.api.sendMessageToChat(chatId, chunks[i]);
       }
     }
   } else {
-    // Отправляем с клавиатурой (3 дня + кнопка "на неделю")
     await ctx.api.sendMessageToChat(chatId, formatted, {
       attachments: [keyboard_schedule_short]
     });
   }
 });
 
-// Обработчик для дедлайнов
 bot.action('deadlines', async (ctx: any) => {
   const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
   const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
@@ -409,8 +355,7 @@ bot.action('deadlines', async (ctx: any) => {
     );
     return;
   }
-  
-  // Форматируем список дедлайнов
+
   let message = '⏰ Ваши дедлайны:\n\n';
   
   activeDeadlines.forEach((deadline, index) => {
@@ -449,8 +394,7 @@ bot.action('deadlines', async (ctx: any) => {
   
   message += '\n💡 Чтобы добавить дедлайн, напишите об этом в GigaChat!';
   message += '\n\n📝 Для изменения или удаления дедлайна используйте кнопки ниже:';
-  
-  // Создаем клавиатуру с кнопками изменения и удаления
+
   const deadlineButtons: any[] = [
     [
       Keyboard.button.callback('✏️ Изменить дедлайн', 'edit_deadline'),
@@ -468,7 +412,6 @@ bot.action('deadlines', async (ctx: any) => {
   });
 });
 
-// Обработчик для редактирования дедлайна
 bot.action('edit_deadline', async (ctx: any) => {
   const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
   const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
@@ -488,8 +431,7 @@ bot.action('edit_deadline', async (ctx: any) => {
     });
     return;
   }
-  
-  // Устанавливаем состояние ожидания номера дедлайна для редактирования
+
   setUserState(userId, 'waiting_deadline_edit_number');
   
   let message = '✏️ Редактирование дедлайна\n\n';
@@ -506,7 +448,6 @@ bot.action('edit_deadline', async (ctx: any) => {
   });
 });
 
-// Обработчик для удаления дедлайна
 bot.action('delete_deadline', async (ctx: any) => {
   const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
   const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
@@ -526,8 +467,7 @@ bot.action('delete_deadline', async (ctx: any) => {
     });
     return;
   }
-  
-  // Устанавливаем состояние ожидания номера дедлайна для удаления
+
   setUserState(userId, 'waiting_deadline_delete_number');
   
   let message = '🗑️ Удаление дедлайна\n\n';
@@ -543,7 +483,6 @@ bot.action('delete_deadline', async (ctx: any) => {
   });
 });
 
-// Обработчик для показа полного расписания на неделю
 bot.action('schedule_week', async (ctx: any) => {
   const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
   const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
@@ -564,12 +503,10 @@ bot.action('schedule_week', async (ctx: any) => {
     );
     return;
   }
-  
-  // Получаем расписание из кэша
+
   let scheduleData = getCachedSchedule(userId);
   
   if (!scheduleData) {
-    // Если кэша нет, парсим заново
     await ctx.api.sendMessageToChat(chatId, '⏳ Загружаю расписание...', {
       attachments: [keyboard_mainmenu]
     });
@@ -590,26 +527,21 @@ bot.action('schedule_week', async (ctx: any) => {
     scheduleData = result.schedule;
     cacheSchedule(userId, scheduleData);
   }
-  
-  // Форматируем расписание на неделю (7 дней)
+
   const formatted = formatSchedule(scheduleData, undefined, 7);
-  
-  // Разбиваем на части, если слишком длинное
+
   if (formatted.length > 4096) {
     const chunks = formatted.match(/[\s\S]{1,4000}/g) || [];
     for (let i = 0; i < chunks.length; i++) {
       if (i === chunks.length - 1) {
-        // Последний chunk с клавиатурой
         await ctx.api.sendMessageToChat(chatId, chunks[i], {
           attachments: [keyboard_mainmenu]
         });
       } else {
-        // Промежуточные chunks без клавиатуры
         await ctx.api.sendMessageToChat(chatId, chunks[i]);
       }
     }
   } else {
-    // Отправляем полное расписание с клавиатурой
     await ctx.api.sendMessageToChat(chatId, formatted, {
       attachments: [keyboard_schedule_short]
     });
@@ -619,8 +551,7 @@ bot.action('schedule_week', async (ctx: any) => {
 bot.action('first_time', async (ctx: any) => {
   const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
   const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
-  
-  // Проверяем наличие парсера
+
   if (!isParserAvailable()) {
     await ctx.api.sendMessageToChat(chatId,
       '❌ Парсер расписания недоступен.\n\n' +
@@ -645,12 +576,7 @@ bot.action('first_time', async (ctx: any) => {
   );
 });
 
-// НОВЫЙ ОБРАБОТЧИК GIGACHAT
 bot.action('gigachat', async (ctx: any) => {
-  // В callback-кнопках:
-  // - ctx.message.sender - это БОТ (is_bot: true)
-  // - ctx.message.recipient.user_id - это ПОЛЬЗОВАТЕЛЬ, который нажал кнопку
-  // Также пробуем update.callback_query.from.id (стандартная структура Telegram)
   const userId = ctx.update?.callback_query?.from?.id
     || ctx.callback_query?.from?.id
     || ctx.message?.recipient?.user_id  // ВАЖНО: recipient, а не sender!
@@ -670,45 +596,35 @@ bot.action('gigachat', async (ctx: any) => {
   await ctx.api.sendMessageToChat(chatId, gigachatWelcome, { attachments: [keyboard_gigachat] });
 });
 
-
-// Обработка текстовых сообщений для GigaChat
 bot.on('message_created', async (ctx: any) => {
   // Получаем user ID и текст сообщения из правильной структуры max-bot-api
   const userId = ctx.message?.sender?.user_id;
   const messageText = ctx.message?.body?.text;
   const isGigachatMode = userId ? (userGigachatMode.get(userId) || false) : false;
-  
-  // В текстовых сообщениях sender.user_id - это ID пользователя
-  // Отладочный вывод (можно убрать позже)
+
   console.log('\n📨 ========== NEW MESSAGE ==========');
   console.log('👤 User ID (sender):', userId);
   console.log('💬 Message:', messageText);
   console.log('🔧 GigaChat mode:', isGigachatMode);
   console.log('📨 ================================\n');
-  
-  // Если нет user ID, пропускаем (это может быть системное сообщение)
+
   if (!userId) {
     console.log('⚠️ Skipping message: no user ID found');
     return;
   }
-  
-  // Пропускаем команды
+
   if (messageText?.startsWith('/')) {
     return;
   }
-  
-  // Если это не текст сообщения (например, callback или другое событие)
+
   if (!messageText) {
     console.log('⚠️ Skipping message: no text content');
     return;
   }
-  
-  // Обработка состояний для настройки расписания
+
   const userState = getUserState(userId);
-  
-  // Обработка состояний для дедлайнов
+
   if (userState === 'waiting_deadline_edit_number') {
-    // Проверяем на отмену
     if (messageText.toLowerCase().trim() === 'отмена' || messageText.toLowerCase().trim() === 'cancel') {
       clearUserState(userId);
       await ctx.reply('❌ Редактирование отменено', { attachments: [keyboard_mainmenu] });
@@ -716,8 +632,6 @@ bot.on('message_created', async (ctx: any) => {
     }
     
     const activeDeadlines = getActiveDeadlines(userId);
-    
-    // Парсим номер и новое описание
     const text = messageText.trim();
     const numberMatch = text.match(/^(\d+)\s+(.+)$/);
     
@@ -744,8 +658,6 @@ bot.on('message_created', async (ctx: any) => {
     }
     
     const deadline = activeDeadlines[deadlineNumber - 1];
-    
-    // Парсим новый дедлайн из описания
     const parsedDeadline = parseDeadlineFromText(newDescription);
     
     if (!parsedDeadline) {
@@ -758,8 +670,7 @@ bot.on('message_created', async (ctx: any) => {
       );
       return;
     }
-    
-    // Обновляем дедлайн
+
     const updated = updateDeadline(userId, deadline.id, {
       title: parsedDeadline.title,
       subject: parsedDeadline.subject,
@@ -790,7 +701,6 @@ bot.on('message_created', async (ctx: any) => {
   }
   
   if (userState === 'waiting_deadline_delete_number') {
-    // Проверяем на отмену
     if (messageText.toLowerCase().trim() === 'отмена' || messageText.toLowerCase().trim() === 'cancel') {
       clearUserState(userId);
       await ctx.reply('❌ Удаление отменено', { attachments: [keyboard_mainmenu] });
@@ -798,8 +708,6 @@ bot.on('message_created', async (ctx: any) => {
     }
     
     const activeDeadlines = getActiveDeadlines(userId);
-    
-    // Проверяем, что пользователь ввел номер дедлайна
     const inputNumber = parseInt(messageText.trim(), 10);
     
     if (isNaN(inputNumber) || inputNumber < 1 || inputNumber > activeDeadlines.length) {
@@ -812,8 +720,6 @@ bot.on('message_created', async (ctx: any) => {
     }
     
     const deadline = activeDeadlines[inputNumber - 1];
-    
-    // Удаляем дедлайн
     const removed = removeDeadline(userId, deadline.id);
     
     if (removed) {
@@ -838,16 +744,11 @@ bot.on('message_created', async (ctx: any) => {
   }
   
   if (userState === 'waiting_university') {
-    // Пользователь вводит название университета
     const universityName = messageText.trim();
-    
-    // Преобразуем название в slug
     const slug = universityNameToSlug(universityName);
     
     if (!slug) {
-      // Пробуем найти похожие
       const similar = findSimilarUniversities(universityName);
-      
       if (similar.length > 0) {
         const similarList = similar.map(u => `• ${u.name} (${u.slug})`).join('\n');
         await ctx.reply(
@@ -868,8 +769,6 @@ bot.on('message_created', async (ctx: any) => {
       }
       return;
     }
-    
-    // Находим человекочитаемое название для отображения
     const popular = getPopularUniversities().find(u => u.slug === slug);
     const displayName = popular ? popular.name : slug.toUpperCase();
     
@@ -885,14 +784,12 @@ bot.on('message_created', async (ctx: any) => {
   }
   
   if (userState === 'waiting_group') {
-    // Пользователь вводит группу
     const group = messageText.trim();
     setUserGroup(userId, group);
     clearUserState(userId);
     
     const userData = getUserData(userId);
-    
-    // Проверяем наличие парсера
+
     if (!isParserAvailable()) {
       await ctx.reply(
         `✅ Группа сохранена: ${group}\n\n` +
@@ -908,8 +805,7 @@ bot.on('message_created', async (ctx: any) => {
       `⏳ Парсинг расписания для ${userData?.university} / ${group}...`,
       { attachments: [keyboard_mainmenu] }
     );
-    
-    // Парсим расписание
+
     const result = await parseSchedule({
       slug: userData!.university!,
       group: group
@@ -923,8 +819,7 @@ bot.on('message_created', async (ctx: any) => {
       );
       return;
     }
-    
-    // Кэшируем расписание
+
     cacheSchedule(userId, result.schedule);
     
     await ctx.reply(
@@ -934,10 +829,8 @@ bot.on('message_created', async (ctx: any) => {
     );
     return;
   }
-  
-  // Если пользователь в режиме GigaChat
+
   if (isGigachatMode && userId) {
-    // Проверяем наличие credentials
     if (!gigachatCredentials) {
       console.error('❌ GIGACHAT_CREDENTIALS не найден в переменных окружения');
       console.log('🔍 Проверяем process.env:', {
@@ -950,24 +843,17 @@ bot.on('message_created', async (ctx: any) => {
       );
       return;
     }
-    
-    // Проверяем, не упоминает ли пользователь дедлайн
+
     const parsedDeadline = parseDeadlineFromText(messageText);
-    
-    // Показываем, что бот думает
+
     await ctx.reply('🤔 Думаю...', { attachments: [keyboard_gigachat] });
     
     try {
-      // Отправляем запрос в GigaChat
       const response = await gigaChatService.sendMessage(messageText);
-      
-      // Если распознали дедлайн, сохраняем его
       if (parsedDeadline) {
         try {
           const deadline = addDeadline(userId, parsedDeadline);
           const dueDate = new Date(deadline.dueDate);
-          
-          // Добавляем информацию о сохраненном дедлайне к ответу
           const deadlineInfo = `\n\n✅ Дедлайн сохранен!\n` +
             `📌 ${deadline.title}\n` +
             (deadline.subject ? `📚 Предмет: ${deadline.subject}\n` : '') +
@@ -977,8 +863,6 @@ bot.on('message_created', async (ctx: any) => {
               year: 'numeric' 
             })}\n` +
             `💡 Вы можете посмотреть все дедлайны в меню "⏰ Дедлайны"`;
-          
-          // Отправляем ответ GigaChat с информацией о дедлайне
           if ((response + deadlineInfo).length > 4096) {
             const chunks = response.match(/[\s\S]{1,4000}/g) || [];
             for (let i = 0; i < chunks.length; i++) {
@@ -992,7 +876,6 @@ bot.on('message_created', async (ctx: any) => {
           }
         } catch (deadlineError) {
           console.error('Ошибка при сохранении дедлайна:', deadlineError);
-          // Если не удалось сохранить дедлайн, просто отправляем ответ GigaChat
           if (response.length > 4096) {
             const chunks = response.match(/[\s\S]{1,4096}/g) || [];
             for (let i = 0; i < chunks.length; i++) {
@@ -1005,7 +888,6 @@ bot.on('message_created', async (ctx: any) => {
           }
         }
       } else {
-        // Обычный ответ без дедлайна
         if (response.length > 4096) {
           const chunks = response.match(/[\s\S]{1,4096}/g) || [];
           for (let i = 0; i < chunks.length; i++) {
@@ -1031,7 +913,6 @@ bot.on('message_created', async (ctx: any) => {
       await ctx.reply(errorMessage, { attachments: [keyboard_gigachat] });
     }
   } else {
-    // Если не в режиме GigaChat и неизвестная команда
     if (messageText !== '/start' && messageText !== '/help') {
       await ctx.reply(unknown);
       await ctx.reply(mainmenu,{attachments: [keyboard_mainmenu]});
