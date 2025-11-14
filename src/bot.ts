@@ -11,7 +11,7 @@ if (!botToken) {
   throw new Error('BOT_TOKEN не найден. Добавьте его в .env');
 }
 
-let GigachatBool:boolean = true;
+let GigachatBool:boolean = false;
 
 const bot = new Bot(botToken);
 
@@ -123,10 +123,6 @@ bot.action('schedule', async (ctx: any) => {
   await ctx.reply(schedule,{attachments: [keyboard_helpmenu]});
 });
 
-bot.action('gigachat', async (ctx: any) => {
-  await ctx.reply(gigachat,{attachments: [keyboard_helpmenu]});
-});
-
 bot.action('first_time', async (ctx: any) => {
   await ctx.reply('Введите свой университет:');
 });
@@ -136,21 +132,18 @@ const keyboard_gigachat = Keyboard.inlineKeyboard([
     ],
 ]);
 //Обработчик неизвестных команд
-if (GigachatBool == true) {
+if (GigachatBool == false) {
   bot.on('message_created', async (ctx: any) => {
-    // @ts-ignore
     await ctx.reply(unknown);
-    // @ts-ignore
     await ctx.reply(mainmenu,{attachments: [keyboard_mainmenu]});
   });
 } else {
   // код для случая, когда GigachatBool false
 }
 // НОВЫЙ ОБРАБОТЧИК GIGACHAT
-bot.action('gigachat', async (ctx) => {
+bot.action('gigachat', async (ctx:any) => {
   const userId = ctx.message.from_id;
-  setUserState(userId, 'gigachat_mode');
-  
+  GigachatBool = true;
   const gigachatWelcome = [
     '🤖 Добро пожаловать в чат с GigaChat!',
     '',
@@ -169,9 +162,8 @@ bot.action('gigachat', async (ctx) => {
 });
 
 // Обработка текстовых сообщений для GigaChat
-bot.on('message', async (ctx: Context) => {
+bot.on('message_callback', async (ctx: any) => {
   const userId = ctx.message.from_id;
-  const userState = getUserState(userId);
   const messageText = ctx.message.text;
   
   // Пропускаем команды
@@ -180,7 +172,7 @@ bot.on('message', async (ctx: Context) => {
   }
   
   // Если пользователь в режиме GigaChat и это не команда
-  if (userState === 'gigachat_mode' && messageText && !messageText.startsWith('/')) {
+  if (GigachatBool == true && messageText && !messageText.startsWith('/')) {
     // Показываем, что бот думает
     await ctx.reply('🤔 Думаю...', { keyboard: keyboard_gigachat });
     
@@ -210,3 +202,4 @@ bot.on('message', async (ctx: Context) => {
   }
 });
 bot.start();
+
