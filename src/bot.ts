@@ -448,9 +448,83 @@ bot.action('deadlines', async (ctx: any) => {
   
   message += '\n💡 Чтобы добавить дедлайн, напишите об этом в GigaChat!';
   
-  await ctx.api.sendMessageToChat(chatId, message, {
-    attachments: [keyboard_deadlines]
+  // Создаем динамическую клавиатуру с кнопками удаления
+  const deadlineButtons: any[] = [];
+  activeDeadlines.forEach((deadline, index) => {
+    // Ограничиваем длину текста кнопки (VK имеет лимит)
+    const buttonText = `${index + 1}. Удалить "${deadline.title.substring(0, 20)}${deadline.title.length > 20 ? '...' : ''}"`;
+    deadlineButtons.push([
+      Keyboard.button.callback(buttonText, `delete_deadline_${deadline.id}`)
+    ]);
   });
+  
+  // Добавляем кнопку "Назад"
+  deadlineButtons.push([
+    Keyboard.button.callback('🔙 В главное меню', 'back')
+  ]);
+  
+  const keyboard_with_delete = Keyboard.inlineKeyboard(deadlineButtons);
+  
+  await ctx.api.sendMessageToChat(chatId, message, {
+    attachments: [keyboard_with_delete]
+  });
+});
+
+// Обработчик для удаления дедлайна
+bot.action(/^delete_deadline_(.+)$/, async (ctx: any) => {
+  const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
+  const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
+  
+  if (!userId) {
+    await ctx.api.sendMessageToChat(chatId, 'Не удалось определить пользователя', {
+      attachments: [keyboard_mainmenu]
+    });
+    return;
+  }
+  
+  // Извлекаем ID дедлайна из callback_data
+  const match = ctx.update?.callback_query?.data?.match(/^delete_deadline_(.+)$/);
+  if (!match) {
+    await ctx.api.sendMessageToChat(chatId, 'Ошибка: не удалось определить дедлайн', {
+      attachments: [keyboard_mainmenu]
+    });
+    return;
+  }
+  
+  const deadlineId = match[1];
+  const deadlines = getUserDeadlines(userId);
+  const deadline = deadlines.find(d => d.id === deadlineId);
+  
+  if (!deadline) {
+    await ctx.api.sendMessageToChat(chatId, '❌ Дедлайн не найден', {
+      attachments: [keyboard_mainmenu]
+    });
+    return;
+  }
+  
+  // Удаляем дедлайн
+  const removed = removeDeadline(userId, deadlineId);
+  
+  if (removed) {
+    const activeDeadlines = getActiveDeadlines(userId);
+    
+    let message = `✅ Дедлайн "${deadline.title}" успешно удален!`;
+    
+    if (activeDeadlines.length > 0) {
+      message += `\n\n📋 Осталось дедлайнов: ${activeDeadlines.length}`;
+      message += `\n💡 Нажмите "⏰ Дедлайны" для просмотра обновленного списка`;
+    } else {
+      message += `\n\n📋 У вас больше нет активных дедлайнов.`;
+    }
+    
+    await ctx.api.sendMessageToChat(chatId, message, {
+      attachments: [keyboard_mainmenu]
+    });
+  } else {
+    await ctx.api.sendMessageToChat(chatId, '❌ Ошибка при удалении дедлайна', {
+      attachments: [keyboard_mainmenu]
+    });
+  }
 });
 
 // Обработчик для показа полного расписания на неделю
