@@ -160,10 +160,55 @@ export async function parseSchedule(options: ParseScheduleOptions): Promise<Pars
 }
 
 /**
+ * Получает название текущего дня недели на русском
+ */
+function getCurrentDayName(): string {
+    const days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+    const today = new Date();
+    const dayIndex = today.getDay(); // 0 = воскресенье, 1 = понедельник, ...
+    return days[dayIndex];
+}
+
+/**
+ * Получает название завтрашнего дня недели на русском
+ */
+function getTomorrowDayName(): string {
+    const days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dayIndex = tomorrow.getDay();
+    return days[dayIndex];
+}
+
+/**
+ * Находит индекс текущего дня в массиве дней расписания
+ */
+function findCurrentDayIndex(days: any[]): number {
+    const currentDayName = getCurrentDayName();
+    
+    // Ищем точное совпадение
+    for (let i = 0; i < days.length; i++) {
+        if (days[i].name === currentDayName) {
+            return i;
+        }
+    }
+    
+    // Если не нашли, ищем по частичному совпадению (на случай если есть дата или другие символы)
+    for (let i = 0; i < days.length; i++) {
+        if (days[i].name && days[i].name.includes(currentDayName)) {
+            return i;
+        }
+    }
+    
+    // Если не нашли, возвращаем 0 (показываем с начала недели)
+    return 0;
+}
+
+/**
  * Форматирует расписание для отправки пользователю
  * @param schedule - данные расписания
  * @param date - опциональная дата
- * @param daysLimit - ограничение на количество дней (если не указано, показываются все дни)
+ * @param daysLimit - ограничение на количество дней (если не указано, показываются все дни). Если указано, показываются дни начиная с сегодня
  */
 export function formatSchedule(schedule: any, date?: string, daysLimit?: number): string {
     if (!schedule) {
@@ -191,11 +236,26 @@ function formatToguSchedule(schedule: any, date?: string, daysLimit?: number): s
     }
     
     const days = schedule.days || [];
-    const daysToShow = daysLimit ? days.slice(0, daysLimit) : days;
+    let daysToShow: any[];
+    
+    if (daysLimit) {
+        // Находим индекс текущего дня
+        const currentIndex = findCurrentDayIndex(days);
+        // Берем дни начиная с сегодня (сегодня и завтра)
+        daysToShow = days.slice(currentIndex, currentIndex + daysLimit);
+        
+        // Если не хватило дней до конца недели, дополняем с начала следующей недели
+        if (daysToShow.length < daysLimit && days.length > 0) {
+            const remaining = daysLimit - daysToShow.length;
+            daysToShow = daysToShow.concat(days.slice(0, remaining));
+        }
+    } else {
+        daysToShow = days;
+    }
     
     // Если показываем ограниченное количество дней, добавляем информацию
     if (daysLimit && days.length > daysLimit) {
-        result += `📆 Показано ${daysLimit} из ${days.length} дней\n\n`;
+        result += `📆 Показано ${daysToShow.length} из ${days.length} дней\n\n`;
     }
     
     for (const day of daysToShow) {
@@ -253,11 +313,41 @@ function formatToguSchedule(schedule: any, date?: string, daysLimit?: number): s
 function formatDnevuchSchedule(schedule: any[], date?: string, daysLimit?: number): string {
     let result = '📅 Расписание\n\n';
     
-    const daysToShow = daysLimit ? schedule.slice(0, daysLimit) : schedule;
+    let daysToShow: any[];
+    
+    if (daysLimit) {
+        // Для формата dnevuch пытаемся найти текущий день по дате
+        const today = new Date();
+        const todayStr = today.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        
+        let currentIndex = 0;
+        // Ищем день с сегодняшней датой
+        for (let i = 0; i < schedule.length; i++) {
+            const daySchedule = schedule[i];
+            if (Array.isArray(daySchedule) && daySchedule.length > 0) {
+                const firstItem = daySchedule[0];
+                if (firstItem.date && firstItem.date.includes(todayStr)) {
+                    currentIndex = i;
+                    break;
+                }
+            }
+        }
+        
+        // Берем дни начиная с сегодня
+        daysToShow = schedule.slice(currentIndex, currentIndex + daysLimit);
+        
+        // Если не хватило дней, дополняем с начала
+        if (daysToShow.length < daysLimit && schedule.length > 0) {
+            const remaining = daysLimit - daysToShow.length;
+            daysToShow = daysToShow.concat(schedule.slice(0, remaining));
+        }
+    } else {
+        daysToShow = schedule;
+    }
     
     // Если показываем ограниченное количество дней, добавляем информацию
     if (daysLimit && schedule.length > daysLimit) {
-        result += `📆 Показано ${daysLimit} из ${schedule.length} дней\n\n`;
+        result += `📆 Показано ${daysToShow.length} из ${schedule.length} дней\n\n`;
     }
     
     // schedule - это массив массивов, где каждый внутренний массив - это день
