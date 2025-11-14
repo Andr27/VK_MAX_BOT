@@ -438,7 +438,7 @@ bot.action('schedule_week', async (ctx: any) => {
   } else {
     // Отправляем полное расписание с клавиатурой
     await ctx.api.sendMessageToChat(chatId, formatted, {
-      attachments: [keyboard_mainmenu]
+      attachments: [keyboard_schedule_short]
     });
   }
 });
