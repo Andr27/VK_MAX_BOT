@@ -143,6 +143,11 @@ export class GigaChatService {
 
     // Отправка сообщения в GigaChat
     async sendMessage(message: string): Promise<string> {
+        // Проверяем наличие credentials
+        if (!this.credentials) {
+            throw new Error('GIGACHAT_CREDENTIALS не настроен. Добавьте его в .env файл.');
+        }
+        
         console.log('\n🤖 ========== SENDING TO GIGACHAT ==========');
         console.log('💬 Message details:');
         console.log('   - Length:', message.length, 'characters');
@@ -197,15 +202,23 @@ export class GigaChatService {
             console.log('   - Has choices:', !!response.data.choices);
             console.log('   - Choices count:', response.data.choices?.length || 0);
             
-            if (response.data.choices && response.data.choices.length > 0) {
-                const choice = response.data.choices[0];
-                console.log('   - Finish reason:', choice.finish_reason);
-                console.log('   - Has message:', !!choice.message);
-                console.log('   - Message role:', choice.message?.role);
-                console.log('   - Content length:', choice.message?.content?.length || 0);
+            if (!response.data.choices || response.data.choices.length === 0) {
+                console.error('❌ No choices in response');
+                throw new Error('GigaChat API вернул пустой ответ');
             }
             
-            const responseText = response.data.choices[0].message.content;
+            const choice = response.data.choices[0];
+            console.log('   - Finish reason:', choice.finish_reason);
+            console.log('   - Has message:', !!choice.message);
+            console.log('   - Message role:', choice.message?.role);
+            console.log('   - Content length:', choice.message?.content?.length || 0);
+            
+            if (!choice.message || !choice.message.content) {
+                console.error('❌ No message content in response');
+                throw new Error('GigaChat API вернул ответ без содержимого');
+            }
+            
+            const responseText = choice.message.content;
             console.log('💭 Response content:');
             console.log('   - Length:', responseText.length, 'characters');
             console.log('   - Preview:', responseText.substring(0, 150) + (responseText.length > 150 ? '...' : ''));

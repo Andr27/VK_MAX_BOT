@@ -8,9 +8,17 @@ import { gigaChatService } from './utils/gigachat';
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 const botToken = process.env.BOT_TOKEN;
+const gigachatCredentials = process.env.GIGACHAT_CREDENTIALS;
 
 if (!botToken) {
   throw new Error('BOT_TOKEN не найден. Добавьте его в .env');
+}
+
+if (!gigachatCredentials) {
+  console.warn('⚠️ GIGACHAT_CREDENTIALS не найден. Функция GigaChat будет недоступна.');
+  console.warn('💡 Для работы GigaChat добавьте GIGACHAT_CREDENTIALS в .env файл');
+  console.warn('💡 Получите Client ID и Client Secret в личном кабинете GigaChat API');
+  console.warn('💡 Закодируйте их в Base64 в формате "Client ID:Client Secret"');
 }
 
 // Храним состояния для каждого пользователя
@@ -191,6 +199,15 @@ bot.on('message_created', async (ctx: any) => {
   
   // Если пользователь в режиме GigaChat
   if (isGigachatMode) {
+    // Проверяем наличие credentials
+    if (!gigachatCredentials) {
+      await ctx.reply(
+        '⚠️ GigaChat не настроен. Обратитесь к администратору бота.', 
+        { attachments: [keyboard_gigachat] }
+      );
+      return;
+    }
+    
     // Показываем, что бот думает
     await ctx.reply('🤔 Думаю...', { attachments: [keyboard_gigachat] });
     
@@ -210,12 +227,17 @@ bot.on('message_created', async (ctx: any) => {
         await ctx.reply(response, { attachments: [keyboard_gigachat] });
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('GigaChat error:', error);
-      await ctx.reply(
-        '⚠️ Произошла ошибка при обращении к нейросети. Попробуйте еще раз.', 
-        { attachments: [keyboard_gigachat] }
-      );
+      let errorMessage = '⚠️ Произошла ошибка при обращении к нейросети. Попробуйте еще раз.';
+      
+      if (error.message && error.message.includes('GIGACHAT_CREDENTIALS')) {
+        errorMessage = '⚠️ GigaChat не настроен. Обратитесь к администратору бота.';
+      } else if (error.message && error.message.includes('Rate limit')) {
+        errorMessage = '⚠️ Превышен лимит запросов. Попробуйте позже.';
+      }
+      
+      await ctx.reply(errorMessage, { attachments: [keyboard_gigachat] });
     }
   } else {
     // Если не в режиме GigaChat и неизвестная команда
