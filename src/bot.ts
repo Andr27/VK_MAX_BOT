@@ -232,19 +232,11 @@ bot.command('help', async (ctx) => {
 //************************************************
 
 bot.action('back', async (ctx: any) => {
-  // Для callback-кнопок структура может быть другой
-  const userId = ctx.message?.sender?.user_id 
-    || ctx.update?.callback_query?.from?.id
-    || ctx.update?.callback_query?.message?.sender?.user_id
-    || ctx.callback_query?.from?.id;
-    
-  // Отладка для callback-кнопок
-  if (!userId) {
-    console.log('\n🔙 ========== CALLBACK DEBUG ==========');
-    console.log('🔍 ctx keys:', Object.keys(ctx).join(', '));
-    console.log('🔍 ctx.update:', ctx.update ? Object.keys(ctx.update).join(', ') : 'undefined');
-    console.log('🔍 ctx.update?.callback_query:', ctx.update?.callback_query ? JSON.stringify(ctx.update.callback_query, null, 2).substring(0, 300) : 'undefined');
-  }
+  // Для callback-кнопок пробуем разные варианты
+  const userId = ctx.update?.callback_query?.from?.id
+    || ctx.callback_query?.from?.id
+    || ctx.message?.sender?.user_id
+    || ctx.update?.callback_query?.message?.sender?.user_id;
   
   if (userId) {
     userGigachatMode.set(userId, false);
@@ -272,22 +264,27 @@ bot.action('first_time', async (ctx: any) => {
 
 // НОВЫЙ ОБРАБОТЧИК GIGACHAT
 bot.action('gigachat', async (ctx: any) => {
-  // Для callback-кнопок структура может быть другой
-  const userId = ctx.message?.sender?.user_id 
-    || ctx.update?.callback_query?.from?.id
-    || ctx.update?.callback_query?.message?.sender?.user_id
-    || ctx.callback_query?.from?.id;
+  // Для callback-кнопок пробуем разные варианты
+  // В callback может быть структура update.callback_query.from.id (ID пользователя, который нажал кнопку)
+  const userId = ctx.update?.callback_query?.from?.id
+    || ctx.callback_query?.from?.id
+    || ctx.message?.sender?.user_id
+    || ctx.update?.callback_query?.message?.sender?.user_id;
     
   // Отладка для callback-кнопок
-  if (!userId) {
-    console.log('\n🎯 ========== CALLBACK DEBUG ==========');
-    console.log('🔍 ctx keys:', Object.keys(ctx).join(', '));
-    console.log('🔍 ctx.update:', ctx.update ? Object.keys(ctx.update).join(', ') : 'undefined');
-    console.log('🔍 ctx.update?.callback_query:', ctx.update?.callback_query ? JSON.stringify(ctx.update.callback_query, null, 2).substring(0, 300) : 'undefined');
-  }
+  console.log('\n🎯 ========== GIGACHAT CALLBACK ==========');
+  console.log('🔍 ctx.update?.callback_query?.from:', ctx.update?.callback_query?.from);
+  console.log('🔍 ctx.message?.sender:', ctx.message?.sender);
+  console.log('🔍 ctx.message?.recipient:', ctx.message?.recipient);
+  console.log('👤 User ID (selected):', userId);
+  console.log('🎯 ===========================================\n');
   
   if (userId) {
     userGigachatMode.set(userId, true);
+    console.log('✅ GigaChat mode activated for user:', userId);
+    console.log('🔍 All active modes:', Array.from(userGigachatMode.entries()));
+  } else {
+    console.error('❌ Could not determine user ID from callback!');
   }
   
   console.log('\n🎯 ========== GIGACHAT MODE ACTIVATED ==========');
@@ -307,14 +304,13 @@ bot.on('message_created', async (ctx: any) => {
   const messageText = ctx.message?.body?.text;
   const isGigachatMode = userId ? (userGigachatMode.get(userId) || false) : false;
   
-  // Отладочный вывод (можно убрать позже)
-  if (!userId || !messageText) {
-    console.log('\n📨 ========== NEW MESSAGE (DEBUG) ==========');
-    console.log('🔍 ctx.message?.sender:', ctx.message?.sender);
-    console.log('🔍 ctx.message?.body:', ctx.message?.body);
-    console.log('👤 User ID:', userId);
-    console.log('💬 Message:', messageText);
-  }
+  console.log('\n📨 ========== NEW MESSAGE ==========');
+  console.log('👤 User ID (sender):', userId);
+  console.log('👤 Recipient user_id:', ctx.message?.recipient?.user_id);
+  console.log('💬 Message:', messageText);
+  console.log('🔧 GigaChat mode:', isGigachatMode);
+  console.log('🔍 All active GigaChat modes:', Array.from(userGigachatMode.entries()));
+  console.log('📨 ================================\n');
   
   // Если нет user ID, пропускаем (это может быть системное сообщение)
   if (!userId) {
