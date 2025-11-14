@@ -1,11 +1,63 @@
 import { Bot } from '@maxhub/max-bot-api';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { Keyboard } from '@maxhub/max-bot-api';
 import { gigaChatService } from './utils/gigachat';
 
 
-dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+// Загружаем .env из корня проекта (работает и в dev, и в production)
+// Пробуем несколько путей для надежности
+let envPath: string | null = null;
+
+// Вариант 1: относительно __dirname (когда запускается из src/)
+const path1 = path.resolve(__dirname, '..', '.env');
+// Вариант 2: относительно process.cwd() (когда запускается из корня проекта)
+const path2 = path.resolve(process.cwd(), '.env');
+// Вариант 3: если process.cwd() указывает на src/, поднимаемся на уровень выше
+const path3 = path.resolve(process.cwd(), '..', '.env');
+// Вариант 4: ищем package.json и берем .env из той же директории
+let path4: string | null = null;
+try {
+    const packageJsonPath = require.resolve('../package.json');
+    path4 = path.resolve(path.dirname(packageJsonPath), '.env');
+} catch (e) {
+    // package.json не найден, пропускаем этот вариант
+}
+
+// Проверяем, какой путь существует
+const pathsToCheck = [path1, path2, path3, path4].filter(p => p !== null) as string[];
+for (const p of pathsToCheck) {
+    if (fs.existsSync(p)) {
+        envPath = p;
+        break;
+    }
+}
+
+// Если ни один путь не найден, используем путь относительно __dirname по умолчанию
+if (!envPath) {
+    envPath = path1;
+}
+
+console.log('📁 Trying to load .env from:');
+console.log('   1. ', path1, fs.existsSync(path1) ? '✅ EXISTS' : '❌ NOT FOUND');
+console.log('   2. ', path2, fs.existsSync(path2) ? '✅ EXISTS' : '❌ NOT FOUND');
+console.log('   3. ', path3, fs.existsSync(path3) ? '✅ EXISTS' : '❌ NOT FOUND');
+if (path4) {
+    console.log('   4. ', path4, fs.existsSync(path4) ? '✅ EXISTS' : '❌ NOT FOUND');
+}
+console.log('📁 Selected path:', envPath);
+console.log('📁 File exists:', fs.existsSync(envPath));
+console.log('📁 Current working directory:', process.cwd());
+console.log('📁 __dirname:', __dirname);
+
+// Загружаем .env
+const result = dotenv.config({ path: envPath });
+if (result.error) {
+    console.error('❌ Error loading .env:', result.error.message);
+} else {
+    console.log('✅ .env loaded successfully from:', envPath);
+}
 
 const botToken = process.env.BOT_TOKEN;
 const gigachatCredentials = process.env.GIGACHAT_CREDENTIALS;
