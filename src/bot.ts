@@ -150,8 +150,12 @@ bot.action('gigachat', async (ctx: any) => {
   const userId = ctx.message.from_id;
   userGigachatMode.set(userId, true);
   
+  console.log(`🎯 User ${userId} entered GigaChat mode`);
+  
   await ctx.reply(gigachatWelcome, { attachments: [keyboard_gigachat] });
 });
+
+
 
 // Обработка текстовых сообщений для GigaChat
 bot.on('message_created', async (ctx: any) => {
