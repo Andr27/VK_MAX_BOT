@@ -3,6 +3,16 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { Keyboard } from '@maxhub/max-bot-api';
+import { 
+    getUserData, 
+    setUserUniversity, 
+    setUserGroup, 
+    cacheSchedule, 
+    getCachedSchedule, 
+    hasCompleteUserData 
+} from './database/userData';
+import { parseSchedule, formatSchedule, listGroups, isParserAvailable } from './parser/scheduleParser';
+import { getUserState, setUserState, clearUserState } from './utils/userStates';
 // НЕ импортируем gigaChatService здесь, так как .env еще не загружен
 // Импортируем после загрузки .env
 
@@ -115,6 +125,13 @@ if (!gigachatCredentials) {
   console.warn('💡 Для работы GigaChat добавьте GIGACHAT_CREDENTIALS в .env файл');
   console.warn('💡 Получите Client ID и Client Secret в личном кабинете GigaChat API');
   console.warn('💡 Закодируйте их в Base64 в формате "Client ID:Client Secret"');
+}
+
+// Проверяем наличие парсера
+if (!isParserAvailable()) {
+  console.warn('⚠️ Python парсер не найден. Функция расписания будет недоступна.');
+  console.warn('💡 Убедитесь, что директория parser/ находится в корне проекта');
+  console.warn('💡 И что файл parser/parser.py существует');
 }
 
 // Храним состояния для каждого пользователя
@@ -255,11 +272,94 @@ bot.action('help', async (ctx: any) => {
 });
 
 bot.action('schedule', async (ctx: any) => {
-  await ctx.reply(schedule,{attachments: [keyboard_mainmenu]});
+  const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
+  
+  if (!userId) {
+    await ctx.reply('Не удалось определить пользователя', { attachments: [keyboard_mainmenu] });
+    return;
+  }
+  
+  // Проверяем наличие парсера
+  if (!isParserAvailable()) {
+    await ctx.reply(
+      '❌ Парсер расписания недоступен.\n\n' +
+      'Убедитесь, что директория parser/ находится в проекте и содержит parser.py',
+      { attachments: [keyboard_mainmenu] }
+    );
+    return;
+  }
+  
+  const userData = getUserData(userId);
+  
+  if (!hasCompleteUserData(userId)) {
+    await ctx.reply(
+      '❌ Расписание не настроено.\n\n' +
+      'Для начала настройте расписание:\n' +
+      '1. Укажите университет (slug)\n' +
+      '2. Укажите группу\n\n' +
+      'Нажмите кнопку "Начать" для настройки.',
+      { attachments: [keyboard_start] }
+    );
+    return;
+  }
+  
+  // Проверяем кэш
+  let scheduleData = getCachedSchedule(userId);
+  
+  if (!scheduleData) {
+    // Парсим расписание
+    await ctx.reply('⏳ Загружаю расписание...', { attachments: [keyboard_mainmenu] });
+    
+    const result = await parseSchedule({
+      slug: userData!.university!,
+      group: userData!.group!
+    });
+    
+    if (!result.success) {
+      await ctx.reply(
+        `❌ Ошибка при загрузке расписания:\n${result.error}\n\nПроверьте правильность указанных данных.`,
+        { attachments: [keyboard_mainmenu] }
+      );
+      return;
+    }
+    
+    scheduleData = result.schedule;
+    cacheSchedule(userId, scheduleData);
+  }
+  
+  // Форматируем и отправляем расписание
+  const formatted = formatSchedule(scheduleData);
+  
+  // Разбиваем на части, если слишком длинное
+  if (formatted.length > 4096) {
+    const chunks = formatted.match(/[\s\S]{1,4000}/g) || [];
+    for (let i = 0; i < chunks.length; i++) {
+      await ctx.reply(chunks[i], {
+        attachments: i === chunks.length - 1 ? keyboard_mainmenu : undefined
+      });
+    }
+  } else {
+    await ctx.reply(formatted, { attachments: [keyboard_mainmenu] });
+  }
 });
 
 bot.action('first_time', async (ctx: any) => {
-  await ctx.reply('Введите свой университет:');
+  const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
+  
+  // Проверяем наличие парсера
+  if (!isParserAvailable()) {
+    await ctx.reply(
+      '❌ Парсер расписания недоступен.\n\n' +
+      'Убедитесь, что директория parser/ находится в проекте и содержит parser.py',
+      { attachments: [keyboard_mainmenu] }
+    );
+    return;
+  }
+  
+  if (userId) {
+    setUserState(userId, 'waiting_university');
+  }
+  await ctx.reply('Введите идентификатор вашего университета (например: togu, pskovgu, petrsu):\n\n💡 Список доступных вузов можно найти на dnevuch.ru');
 });
 
 // НОВЫЙ ОБРАБОТЧИК GIGACHAT
@@ -316,6 +416,74 @@ bot.on('message_created', async (ctx: any) => {
   // Если это не текст сообщения (например, callback или другое событие)
   if (!messageText) {
     console.log('⚠️ Skipping message: no text content');
+    return;
+  }
+  
+  // Обработка состояний для настройки расписания
+  const userState = getUserState(userId);
+  
+  if (userState === 'waiting_university') {
+    // Пользователь вводит университет (slug)
+    const university = messageText.trim().toLowerCase();
+    setUserUniversity(userId, university);
+    setUserState(userId, 'waiting_group');
+    
+    await ctx.reply(
+      `✅ Университет сохранен: ${university}\n\n` +
+      `Теперь введите название вашей группы:`,
+      { attachments: [keyboard_mainmenu] }
+    );
+    return;
+  }
+  
+  if (userState === 'waiting_group') {
+    // Пользователь вводит группу
+    const group = messageText.trim();
+    setUserGroup(userId, group);
+    clearUserState(userId);
+    
+    const userData = getUserData(userId);
+    
+    // Проверяем наличие парсера
+    if (!isParserAvailable()) {
+      await ctx.reply(
+        `✅ Группа сохранена: ${group}\n\n` +
+        `❌ Парсер недоступен. Расписание не может быть загружено.\n` +
+        `Убедитесь, что директория parser/ находится в проекте.`,
+        { attachments: [keyboard_mainmenu] }
+      );
+      return;
+    }
+    
+    await ctx.reply(
+      `✅ Группа сохранена: ${group}\n\n` +
+      `⏳ Парсинг расписания для ${userData?.university} / ${group}...`,
+      { attachments: [keyboard_mainmenu] }
+    );
+    
+    // Парсим расписание
+    const result = await parseSchedule({
+      slug: userData!.university!,
+      group: group
+    });
+    
+    if (!result.success) {
+      await ctx.reply(
+        `❌ Ошибка при парсинге расписания:\n${result.error}\n\n` +
+        `Проверьте правильность указанных данных и попробуйте снова.`,
+        { attachments: [keyboard_mainmenu] }
+      );
+      return;
+    }
+    
+    // Кэшируем расписание
+    cacheSchedule(userId, result.schedule);
+    
+    await ctx.reply(
+      `✅ Расписание успешно загружено и сохранено!\n\n` +
+      `Теперь вы можете просматривать расписание через кнопку "📅 Расписание"`,
+      { attachments: [keyboard_mainmenu] }
+    );
     return;
   }
   
