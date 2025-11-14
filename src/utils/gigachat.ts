@@ -6,6 +6,13 @@ export class GigaChatService {
     private baseURL = 'https://gigachat.devices.sberbank.ru/api/v1';
     private credentials = process.env.GIGACHAT_CREDENTIALS || '';
     
+    constructor() {
+        console.log('GigaChat credentials loaded:', this.credentials ? 'YES' : 'NO');
+        if (!this.credentials) {
+            console.error('GIGACHAT_CREDENTIALS not found in environment!');
+        }
+    }
+    
     // Получение access token с кэшированием
     private async getAccessToken(): Promise<string> {
         // Если токен еще действителен (меньше 30 минут), возвращаем его
