@@ -105,39 +105,38 @@ const unknown = [
 //********ИНИЦИАЛИЗАЦИЯ КОМАНД ЧЕРЕЗ SLASH*************
 //************************************************
 
-bot.command('start', (ctx: Context) => {
-  ctx.reply(startMessage,{attachments: [keyboard_start]});
+bot.command('start', async (ctx: Context) => {
+  await ctx.reply(startMessage,{attachments: [keyboard_start]});
 });
 
-bot.command('help', (ctx: Context) => {
-  ctx.reply(helpcomand,{attachments: [keyboard_helpmenu]});
+bot.command('help', async (ctx: Context) => {
+  await ctx.reply(helpcomand,{attachments: [keyboard_helpmenu]});
 });
 
 //************************************************
 //********ИНИЦИАЛИЗАЦИЯ INLINE КНОПОК*************
 //************************************************
 
-bot.action('back', (ctx: Context) => {
-  ctx.reply(mainmenu,{attachments: [keyboard_mainmenu]});
+bot.action('back', async (ctx: Context) => {
+  await ctx.reply(mainmenu,{attachments: [keyboard_mainmenu]});
 });
 
-bot.action('help', (ctx) => {
-  ctx.reply(helpcomand,{attachments: [keyboard_helpmenu]});
+bot.action('help', async (ctx) => {
+  await ctx.reply(helpcomand,{attachments: [keyboard_helpmenu]});
 });
 
-bot.action('schedule', (ctx) => {
-  ctx.reply(schedule,{attachments: [keyboard_helpmenu]});
+bot.action('schedule', async (ctx) => {
+  await ctx.reply(schedule,{attachments: [keyboard_helpmenu]});
 });
 
-bot.action('gigachat', (ctx) => {
-  ctx.reply(gigachat,{attachments: [keyboard_helpmenu]});
+bot.action('gigachat', async (ctx) => {
+  await ctx.reply(gigachat,{attachments: [keyboard_helpmenu]});
 });
-
 
 //Обработчик неизвестных команд
 if (GigachatBool == true) {
-  bot.on('message_created', (ctx) => {
-    ctx.reply(unknown, {attachments: [keyboard_unknown]});
+  bot.on('message_created', async (ctx) => {
+    await ctx.reply(unknown, {attachments: [keyboard_unknown]});
   });
 } else {
   // код для случая, когда GigachatBool false
