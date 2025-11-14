@@ -3,7 +3,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { Keyboard } from '@maxhub/max-bot-api';
-import { gigaChatService } from './utils/gigachat';
+// НЕ импортируем gigaChatService здесь, так как .env еще не загружен
+// Импортируем после загрузки .env
 
 
 // Загружаем .env из корня проекта (работает и в dev, и в production)
@@ -57,10 +58,53 @@ if (result.error) {
     console.error('❌ Error loading .env:', result.error.message);
 } else {
     console.log('✅ .env loaded successfully from:', envPath);
+    console.log('📋 Parsed variables from .env:', result.parsed ? Object.keys(result.parsed).join(', ') : 'none');
+    console.log('📋 Loaded environment variables:');
+    console.log('   - BOT_TOKEN:', process.env.BOT_TOKEN ? `✅ (length: ${process.env.BOT_TOKEN.length})` : '❌ NOT FOUND');
+    console.log('   - GIGACHAT_CREDENTIALS:', process.env.GIGACHAT_CREDENTIALS ? `✅ (length: ${process.env.GIGACHAT_CREDENTIALS.length})` : '❌ NOT FOUND');
+    
+    // Показываем первые и последние символы для проверки (безопасно)
+    if (process.env.BOT_TOKEN) {
+        console.log('   - BOT_TOKEN preview:', process.env.BOT_TOKEN.substring(0, 10) + '...' + process.env.BOT_TOKEN.substring(process.env.BOT_TOKEN.length - 10));
+    }
+    if (process.env.GIGACHAT_CREDENTIALS) {
+        console.log('   - GIGACHAT_CREDENTIALS preview:', process.env.GIGACHAT_CREDENTIALS.substring(0, 20) + '...' + process.env.GIGACHAT_CREDENTIALS.substring(process.env.GIGACHAT_CREDENTIALS.length - 10));
+    }
+    
+    // Показываем все переменные окружения, начинающиеся с BOT_ или GIGA
+    const envKeys = Object.keys(process.env).filter(key => 
+        key.includes('BOT') || key.includes('GIGA') || key.includes('TOKEN') || key.includes('CREDENTIALS')
+    );
+    if (envKeys.length > 0) {
+        console.log('🔍 Found related env vars:', envKeys.join(', '));
+    }
+    
+    // Проверяем, что файл .env читается правильно
+    try {
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        const lines = envContent.split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
+        console.log('📄 .env file lines (without comments):', lines.length);
+        lines.forEach((line, index) => {
+            const key = line.split('=')[0]?.trim();
+            if (key) {
+                console.log(`   Line ${index + 1}: ${key} = ${line.split('=')[1]?.substring(0, 20)}...`);
+            }
+        });
+    } catch (e) {
+        console.error('❌ Error reading .env file:', e);
+    }
 }
 
 const botToken = process.env.BOT_TOKEN;
 const gigachatCredentials = process.env.GIGACHAT_CREDENTIALS;
+
+// Импортируем gigaChatService ПОСЛЕ загрузки .env
+const { gigaChatService } = require('./utils/gigachat');
+
+// Обновляем credentials в GigaChatService после загрузки .env
+if (gigachatCredentials) {
+    gigaChatService.updateCredentials();
+}
 
 if (!botToken) {
   throw new Error('BOT_TOKEN не найден. Добавьте его в .env');
@@ -188,8 +232,10 @@ bot.command('help', async (ctx) => {
 //************************************************
 
 bot.action('back', async (ctx: any) => {
-  const userId = ctx.message.from_id;
-  userGigachatMode.set(userId, false);
+  const userId = ctx.message?.from_id || ctx.from?.id || ctx.message?.from?.id || ctx.userId;
+  if (userId) {
+    userGigachatMode.set(userId, false);
+  }
   
   console.log('\n🔙 ========== RETURN TO MAIN MENU ==========');
   console.log('👤 User ID:', userId);
@@ -213,8 +259,10 @@ bot.action('first_time', async (ctx: any) => {
 
 // НОВЫЙ ОБРАБОТЧИК GIGACHAT
 bot.action('gigachat', async (ctx: any) => {
-  const userId = ctx.message.from_id;
-  userGigachatMode.set(userId, true);
+  const userId = ctx.message?.from_id || ctx.from?.id || ctx.message?.from?.id || ctx.userId;
+  if (userId) {
+    userGigachatMode.set(userId, true);
+  }
   
   console.log('\n🎯 ========== GIGACHAT MODE ACTIVATED ==========');
   console.log('👤 User ID:', userId);
@@ -228,11 +276,18 @@ bot.action('gigachat', async (ctx: any) => {
 
 // Обработка текстовых сообщений для GigaChat
 bot.on('message_created', async (ctx: any) => {
-  const userId = ctx.message.from_id;
-  const messageText = ctx.message.text;
-  const isGigachatMode = userGigachatMode.get(userId) || false;
+  // Пробуем разные варианты получения user ID и текста сообщения
+  const userId = ctx.message?.from_id || ctx.from?.id || ctx.message?.from?.id || ctx.userId;
+  const messageText = ctx.message?.text || ctx.text || ctx.message?.message?.text;
+  const isGigachatMode = userId ? (userGigachatMode.get(userId) || false) : false;
   
   console.log('\n📨 ========== NEW MESSAGE ==========');
+  console.log('🔍 Context structure:');
+  console.log('   - ctx.message:', ctx.message ? 'exists' : 'undefined');
+  console.log('   - ctx.from:', ctx.from ? 'exists' : 'undefined');
+  console.log('   - ctx.message?.from_id:', ctx.message?.from_id);
+  console.log('   - ctx.from?.id:', ctx.from?.id);
+  console.log('   - ctx.message?.from?.id:', ctx.message?.from?.id);
   console.log('👤 User ID:', userId);
   console.log('💬 Message:', messageText);
   console.log('🔧 GigaChat mode:', isGigachatMode);
@@ -250,9 +305,14 @@ bot.on('message_created', async (ctx: any) => {
   }
   
   // Если пользователь в режиме GigaChat
-  if (isGigachatMode) {
+  if (isGigachatMode && userId) {
     // Проверяем наличие credentials
     if (!gigachatCredentials) {
+      console.error('❌ GIGACHAT_CREDENTIALS не найден в переменных окружения');
+      console.log('🔍 Проверяем process.env:', {
+        BOT_TOKEN: process.env.BOT_TOKEN ? '✅' : '❌',
+        GIGACHAT_CREDENTIALS: process.env.GIGACHAT_CREDENTIALS ? '✅' : '❌'
+      });
       await ctx.reply(
         '⚠️ GigaChat не настроен. Обратитесь к администратору бота.', 
         { attachments: [keyboard_gigachat] }

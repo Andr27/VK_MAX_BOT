@@ -4,23 +4,37 @@ export class GigaChatService {
     private accessToken: string = '';
     private tokenExpires: number = 0;
     private baseURL = 'https://gigachat.devices.sberbank.ru/api/v1';
-    private credentials = process.env.GIGACHAT_CREDENTIALS || '';
+    private credentials: string = '';
     
     constructor() {
+        // Получаем credentials заново, так как .env может загрузиться после инициализации класса
+        this.credentials = process.env.GIGACHAT_CREDENTIALS || '';
+        
         console.log('\n🔐 ========== GIGACHAT SERVICE INIT ==========');
         console.log('📝 Credentials loaded:', this.credentials ? '✅ YES' : '❌ NO');
         console.log('📏 Credentials length:', this.credentials.length);
-        console.log('🔍 Credentials full:', this.credentials);
+        if (this.credentials) {
+            console.log('🔍 Credentials preview:', this.credentials.substring(0, 30) + '...' + this.credentials.substring(this.credentials.length - 10));
+        } else {
+            console.log('🔍 Credentials full: (empty)');
+        }
         console.log('🏠 Base URL:', this.baseURL);
         console.log('📁 Current directory:', process.cwd());
         console.log('🌐 Node version:', process.version);
+        console.log('🔍 process.env.GIGACHAT_CREDENTIALS:', process.env.GIGACHAT_CREDENTIALS ? `✅ (length: ${process.env.GIGACHAT_CREDENTIALS.length})` : '❌ NOT FOUND');
         console.log('🔐 ==========================================\n');
         
         if (!this.credentials) {
             console.error('❌ CRITICAL: GIGACHAT_CREDENTIALS not found!');
             console.log('💡 Check .env file in:', process.cwd());
-            console.log('💡 File contents:', require('fs').existsSync('.env') ? 'EXISTS' : 'NOT FOUND');
+            console.log('💡 All env vars with GIGA:', Object.keys(process.env).filter(k => k.includes('GIGA')).join(', '));
         }
+    }
+    
+    // Метод для обновления credentials (на случай, если .env загрузится позже)
+    public updateCredentials(): void {
+        this.credentials = process.env.GIGACHAT_CREDENTIALS || '';
+        console.log('🔄 Credentials updated:', this.credentials ? `✅ (length: ${this.credentials.length})` : '❌ NOT FOUND');
     }
 
     // Получение access token с кэшированием
