@@ -232,10 +232,10 @@ bot.command('help', async (ctx) => {
 //************************************************
 
 bot.action('back', async (ctx: any) => {
-  // Для callback-кнопок пробуем разные варианты
+  // В callback-кнопках используем recipient.user_id (ID пользователя)
   const userId = ctx.update?.callback_query?.from?.id
     || ctx.callback_query?.from?.id
-    || ctx.message?.sender?.user_id
+    || ctx.message?.recipient?.user_id  // ВАЖНО: recipient, а не sender!
     || ctx.update?.callback_query?.message?.sender?.user_id;
   
   if (userId) {
@@ -264,27 +264,17 @@ bot.action('first_time', async (ctx: any) => {
 
 // НОВЫЙ ОБРАБОТЧИК GIGACHAT
 bot.action('gigachat', async (ctx: any) => {
-  // Для callback-кнопок пробуем разные варианты
-  // В callback может быть структура update.callback_query.from.id (ID пользователя, который нажал кнопку)
+  // В callback-кнопках:
+  // - ctx.message.sender - это БОТ (is_bot: true)
+  // - ctx.message.recipient.user_id - это ПОЛЬЗОВАТЕЛЬ, который нажал кнопку
+  // Также пробуем update.callback_query.from.id (стандартная структура Telegram)
   const userId = ctx.update?.callback_query?.from?.id
     || ctx.callback_query?.from?.id
-    || ctx.message?.sender?.user_id
+    || ctx.message?.recipient?.user_id  // ВАЖНО: recipient, а не sender!
     || ctx.update?.callback_query?.message?.sender?.user_id;
-    
-  // Отладка для callback-кнопок
-  console.log('\n🎯 ========== GIGACHAT CALLBACK ==========');
-  console.log('🔍 ctx.update?.callback_query?.from:', ctx.update?.callback_query?.from);
-  console.log('🔍 ctx.message?.sender:', ctx.message?.sender);
-  console.log('🔍 ctx.message?.recipient:', ctx.message?.recipient);
-  console.log('👤 User ID (selected):', userId);
-  console.log('🎯 ===========================================\n');
   
   if (userId) {
     userGigachatMode.set(userId, true);
-    console.log('✅ GigaChat mode activated for user:', userId);
-    console.log('🔍 All active modes:', Array.from(userGigachatMode.entries()));
-  } else {
-    console.error('❌ Could not determine user ID from callback!');
   }
   
   console.log('\n🎯 ========== GIGACHAT MODE ACTIVATED ==========');
@@ -304,12 +294,12 @@ bot.on('message_created', async (ctx: any) => {
   const messageText = ctx.message?.body?.text;
   const isGigachatMode = userId ? (userGigachatMode.get(userId) || false) : false;
   
+  // В текстовых сообщениях sender.user_id - это ID пользователя
+  // Отладочный вывод (можно убрать позже)
   console.log('\n📨 ========== NEW MESSAGE ==========');
   console.log('👤 User ID (sender):', userId);
-  console.log('👤 Recipient user_id:', ctx.message?.recipient?.user_id);
   console.log('💬 Message:', messageText);
   console.log('🔧 GigaChat mode:', isGigachatMode);
-  console.log('🔍 All active GigaChat modes:', Array.from(userGigachatMode.entries()));
   console.log('📨 ================================\n');
   
   // Если нет user ID, пропускаем (это может быть системное сообщение)
