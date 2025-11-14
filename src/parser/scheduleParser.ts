@@ -181,26 +181,165 @@ function getTomorrowDayName(): string {
 }
 
 /**
+ * Парсит дату из строки (различные форматы)
+ */
+function parseDateFromString(dateStr: string): Date | null {
+    if (!dateStr) return null;
+    
+    // Пробуем разные форматы дат
+    const formats = [
+        /(\d{4})-(\d{2})-(\d{2})/, // YYYY-MM-DD
+        /(\d{2})\.(\d{2})\.(\d{4})/, // DD.MM.YYYY
+        /(\d{2})\/(\d{2})\/(\d{4})/, // DD/MM/YYYY
+    ];
+    
+    for (const format of formats) {
+        const match = dateStr.match(format);
+        if (match) {
+            if (format === formats[0]) {
+                // YYYY-MM-DD
+                return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+            } else {
+                // DD.MM.YYYY или DD/MM/YYYY
+                return new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]));
+            }
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * Получает текущую дату в формате YYYY-MM-DD
+ */
+function getTodayDateString(): string {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+/**
+ * Получает завтрашнюю дату в формате YYYY-MM-DD
+ */
+function getTomorrowDateString(): string {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const year = tomorrow.getFullYear();
+    const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const day = String(tomorrow.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+/**
  * Находит индекс текущего дня в массиве дней расписания
+ * Сначала пытается найти по дате, затем по названию дня недели
  */
 function findCurrentDayIndex(days: any[]): number {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = getTodayDateString();
+    const todayStrShort = today.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+    
+    // Сначала пытаемся найти по дате
+    for (let i = 0; i < days.length; i++) {
+        const day = days[i];
+        
+        // Проверяем поле date, если есть
+        if (day.date) {
+            const dayDate = parseDateFromString(day.date);
+            if (dayDate) {
+                dayDate.setHours(0, 0, 0, 0);
+                if (dayDate.getTime() === today.getTime() || dayDate.getTime() > today.getTime()) {
+                    return i;
+                }
+            }
+        }
+        
+        // Проверяем name на наличие даты
+        if (day.name) {
+            // Ищем дату в формате YYYY-MM-DD
+            if (day.name.includes(todayStr)) {
+                return i;
+            }
+            
+            // Ищем дату в формате DD.MM
+            if (day.name.includes(todayStrShort)) {
+                return i;
+            }
+            
+            // Пробуем распарсить дату из name
+            const parsedDate = parseDateFromString(day.name);
+            if (parsedDate) {
+                parsedDate.setHours(0, 0, 0, 0);
+                if (parsedDate.getTime() === today.getTime() || parsedDate.getTime() > today.getTime()) {
+                    return i;
+                }
+            }
+        }
+        
+        // Проверяем lessons на наличие дат
+        if (day.lessons && Array.isArray(day.lessons)) {
+            for (const lesson of day.lessons) {
+                if (lesson.date_range) {
+                    const parsedDate = parseDateFromString(lesson.date_range);
+                    if (parsedDate) {
+                        parsedDate.setHours(0, 0, 0, 0);
+                        if (parsedDate.getTime() === today.getTime() || parsedDate.getTime() > today.getTime()) {
+                            return i;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Если не нашли по дате, ищем ближайший будущий день
+    let nearestFutureIndex = -1;
+    let nearestFutureDate: Date | null = null;
+    
+    for (let i = 0; i < days.length; i++) {
+        const day = days[i];
+        let dayDate: Date | null = null;
+        
+        if (day.date) {
+            dayDate = parseDateFromString(day.date);
+        } else if (day.name) {
+            dayDate = parseDateFromString(day.name);
+        }
+        
+        if (dayDate) {
+            dayDate.setHours(0, 0, 0, 0);
+            if (dayDate.getTime() > today.getTime()) {
+                if (!nearestFutureDate || dayDate.getTime() < nearestFutureDate.getTime()) {
+                    nearestFutureDate = dayDate;
+                    nearestFutureIndex = i;
+                }
+            }
+        }
+    }
+    
+    if (nearestFutureIndex >= 0) {
+        return nearestFutureIndex;
+    }
+    
+    // Если не нашли по дате, пробуем по названию дня недели
     const currentDayName = getCurrentDayName();
     
-    // Ищем точное совпадение
     for (let i = 0; i < days.length; i++) {
         if (days[i].name === currentDayName) {
             return i;
         }
     }
     
-    // Если не нашли, ищем по частичному совпадению (на случай если есть дата или другие символы)
     for (let i = 0; i < days.length; i++) {
         if (days[i].name && days[i].name.includes(currentDayName)) {
             return i;
         }
     }
     
-    // Если не нашли, возвращаем 0 (показываем с начала недели)
+    // Если ничего не нашли, возвращаем 0
     return 0;
 }
 
@@ -318,22 +457,75 @@ function formatDnevuchSchedule(schedule: any[], date?: string, daysLimit?: numbe
     if (daysLimit) {
         // Для формата dnevuch пытаемся найти текущий день по дате
         const today = new Date();
+        today.setHours(0, 0, 0, 0);
         const todayStr = today.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        const todayStrFull = getTodayDateString();
         
-        let currentIndex = 0;
-        // Ищем день с сегодняшней датой
+        let currentIndex = -1;
+        
+        // Сначала ищем точное совпадение с сегодняшней датой
         for (let i = 0; i < schedule.length; i++) {
             const daySchedule = schedule[i];
             if (Array.isArray(daySchedule) && daySchedule.length > 0) {
                 const firstItem = daySchedule[0];
-                if (firstItem.date && firstItem.date.includes(todayStr)) {
-                    currentIndex = i;
-                    break;
+                if (firstItem.date) {
+                    // Проверяем короткий формат DD.MM
+                    if (firstItem.date.includes(todayStr)) {
+                        currentIndex = i;
+                        break;
+                    }
+                    
+                    // Проверяем полный формат YYYY-MM-DD
+                    if (firstItem.date.includes(todayStrFull)) {
+                        currentIndex = i;
+                        break;
+                    }
+                    
+                    // Пробуем распарсить дату
+                    const parsedDate = parseDateFromString(firstItem.date);
+                    if (parsedDate) {
+                        parsedDate.setHours(0, 0, 0, 0);
+                        if (parsedDate.getTime() === today.getTime()) {
+                            currentIndex = i;
+                            break;
+                        }
+                    }
                 }
             }
         }
         
-        // Берем дни начиная с сегодня
+        // Если не нашли сегодняшний день, ищем ближайший будущий
+        if (currentIndex === -1) {
+            let nearestFutureIndex = -1;
+            let nearestFutureDate: Date | null = null;
+            
+            for (let i = 0; i < schedule.length; i++) {
+                const daySchedule = schedule[i];
+                if (Array.isArray(daySchedule) && daySchedule.length > 0) {
+                    const firstItem = daySchedule[0];
+                    if (firstItem.date) {
+                        const parsedDate = parseDateFromString(firstItem.date);
+                        if (parsedDate) {
+                            parsedDate.setHours(0, 0, 0, 0);
+                            if (parsedDate.getTime() > today.getTime()) {
+                                if (!nearestFutureDate || parsedDate.getTime() < nearestFutureDate.getTime()) {
+                                    nearestFutureDate = parsedDate;
+                                    nearestFutureIndex = i;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (nearestFutureIndex >= 0) {
+                currentIndex = nearestFutureIndex;
+            } else {
+                currentIndex = 0; // Если ничего не нашли, начинаем с начала
+            }
+        }
+        
+        // Берем дни начиная с найденного индекса
         daysToShow = schedule.slice(currentIndex, currentIndex + daysLimit);
         
         // Если не хватило дней, дополняем с начала
