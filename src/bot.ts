@@ -4,6 +4,7 @@ import path from 'path';
 import { Keyboard } from '@maxhub/max-bot-api';
 import { gigaChatService } from './utils/gigachat';
 
+
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 const botToken = process.env.BOT_TOKEN;
