@@ -1,11 +1,22 @@
 import fs from 'fs';
 import path from 'path';
 
+export interface Deadline {
+    id: string; // уникальный ID дедлайна
+    title: string; // название работы (например, "Курсовая работа")
+    subject?: string; // предмет (например, "Математика")
+    dueDate: number; // timestamp дедлайна
+    createdAt: number; // timestamp создания
+    description?: string; // дополнительное описание
+    completed?: boolean; // выполнено ли
+}
+
 interface UserScheduleData {
     university: string; // slug вуза (например, "togu", "pskovgu")
     group: string; // название группы
     schedule?: any; // расписание (кэшированное)
     cachedAt?: number; // timestamp последнего обновления
+    deadlines?: Deadline[]; // список дедлайнов
 }
 
 interface UserData {
@@ -145,5 +156,63 @@ export function getCachedSchedule(userId: number): any | null {
 export function hasCompleteUserData(userId: number): boolean {
     const userData = getUserData(userId);
     return !!(userData && userData.university && userData.group);
+}
+
+// Получаем дедлайны пользователя
+export function getUserDeadlines(userId: number): Deadline[] {
+    const userData = getUserData(userId);
+    return userData?.deadlines || [];
+}
+
+// Добавляем дедлайн
+export function addDeadline(userId: number, deadline: Omit<Deadline, 'id' | 'createdAt'>): Deadline {
+    const userData = getUserData(userId) || { university: '', group: '' };
+    const deadlines = userData.deadlines || [];
+    
+    const newDeadline: Deadline = {
+        ...deadline,
+        id: `deadline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        createdAt: Date.now(),
+        completed: false
+    };
+    
+    deadlines.push(newDeadline);
+    setUserData(userId, { deadlines });
+    
+    return newDeadline;
+}
+
+// Удаляем дедлайн
+export function removeDeadline(userId: number, deadlineId: string): boolean {
+    const userData = getUserData(userId);
+    if (!userData || !userData.deadlines) {
+        return false;
+    }
+    
+    const deadlines = userData.deadlines.filter(d => d.id !== deadlineId);
+    setUserData(userId, { deadlines });
+    
+    return true;
+}
+
+// Отмечаем дедлайн как выполненный
+export function completeDeadline(userId: number, deadlineId: string): boolean {
+    const userData = getUserData(userId);
+    if (!userData || !userData.deadlines) {
+        return false;
+    }
+    
+    const deadlines = userData.deadlines.map(d => 
+        d.id === deadlineId ? { ...d, completed: true } : d
+    );
+    setUserData(userId, { deadlines });
+    
+    return true;
+}
+
+// Получаем активные (не выполненные) дедлайны
+export function getActiveDeadlines(userId: number): Deadline[] {
+    const deadlines = getUserDeadlines(userId);
+    return deadlines.filter(d => !d.completed).sort((a, b) => a.dueDate - b.dueDate);
 }
 

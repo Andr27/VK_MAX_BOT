@@ -9,8 +9,14 @@ import {
     setUserGroup, 
     cacheSchedule, 
     getCachedSchedule, 
-    hasCompleteUserData 
+    hasCompleteUserData,
+    getUserDeadlines,
+    addDeadline,
+    removeDeadline,
+    completeDeadline,
+    getActiveDeadlines
 } from './database/userData';
+import { parseDeadlineFromText } from './utils/deadlineParser';
 import { parseSchedule, formatSchedule, listGroups, isParserAvailable } from './parser/scheduleParser';
 import { getUserState, setUserState, clearUserState } from './utils/userStates';
 import { universityNameToSlug, getPopularUniversities, findSimilarUniversities } from './utils/universityMapper';
@@ -156,6 +162,7 @@ const keyboard_mainmenu = Keyboard.inlineKeyboard([
     Keyboard.button.callback('🤖 GigaChat', 'gigachat')
   ],
   [
+    Keyboard.button.callback('⏰ Дедлайны', 'deadlines'),
     Keyboard.button.callback('Помощь❓', 'help')
   ],
 ]);
@@ -176,6 +183,12 @@ const keyboard_schedule_short = Keyboard.inlineKeyboard([
   [
     Keyboard.button.callback('📅 Расписание на неделю', 'schedule_week')
   ],
+  [
+    Keyboard.button.callback('🔙 В главное меню', 'back')
+  ],
+]);
+
+const keyboard_deadlines = Keyboard.inlineKeyboard([
   [
     Keyboard.button.callback('🔙 В главное меню', 'back')
   ],
@@ -368,6 +381,76 @@ bot.action('schedule', async (ctx: any) => {
       attachments: [keyboard_schedule_short]
     });
   }
+});
+
+// Обработчик для дедлайнов
+bot.action('deadlines', async (ctx: any) => {
+  const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
+  const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
+  
+  if (!userId) {
+    await ctx.api.sendMessageToChat(chatId, 'Не удалось определить пользователя', {
+      attachments: [keyboard_mainmenu]
+    });
+    return;
+  }
+  
+  const activeDeadlines = getActiveDeadlines(userId);
+  
+  if (activeDeadlines.length === 0) {
+    await ctx.api.sendMessageToChat(chatId,
+      '📋 У вас пока нет активных дедлайнов.\n\n' +
+      '💡 Вы можете добавить дедлайн, написав об этом в GigaChat, например:\n' +
+      '• "Мне нужно сдать курсовую по математике через неделю"\n' +
+      '• "Дедлайн на реферат по истории завтра"\n' +
+      '• "Сделать домашнюю работу по физике 25.12"',
+      { attachments: [keyboard_deadlines] }
+    );
+    return;
+  }
+  
+  // Форматируем список дедлайнов
+  let message = '⏰ Ваши дедлайны:\n\n';
+  
+  activeDeadlines.forEach((deadline, index) => {
+    const dueDate = new Date(deadline.dueDate);
+    const now = new Date();
+    const daysLeft = Math.ceil((deadline.dueDate - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    message += `${index + 1}. 📌 ${deadline.title}\n`;
+    if (deadline.subject) {
+      message += `   Предмет: ${deadline.subject}\n`;
+    }
+    message += `   📅 Срок: ${dueDate.toLocaleDateString('ru-RU', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric' 
+    })}\n`;
+    
+    if (daysLeft < 0) {
+      message += `   ⚠️ Просрочено на ${Math.abs(daysLeft)} ${Math.abs(daysLeft) === 1 ? 'день' : 'дней'}\n`;
+    } else if (daysLeft === 0) {
+      message += `   🔴 Срок сегодня!\n`;
+    } else if (daysLeft === 1) {
+      message += `   🟡 Остался 1 день\n`;
+    } else if (daysLeft <= 3) {
+      message += `   🟡 Осталось ${daysLeft} дня\n`;
+    } else {
+      message += `   ✅ Осталось ${daysLeft} ${daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней'}\n`;
+    }
+    
+    if (deadline.description) {
+      message += `   📝 ${deadline.description.substring(0, 100)}${deadline.description.length > 100 ? '...' : ''}\n`;
+    }
+    
+    message += '\n';
+  });
+  
+  message += '\n💡 Чтобы добавить дедлайн, напишите об этом в GigaChat!';
+  
+  await ctx.api.sendMessageToChat(chatId, message, {
+    attachments: [keyboard_deadlines]
+  });
 });
 
 // Обработчик для показа полного расписания на неделю
@@ -647,6 +730,9 @@ bot.on('message_created', async (ctx: any) => {
       return;
     }
     
+    // Проверяем, не упоминает ли пользователь дедлайн
+    const parsedDeadline = parseDeadlineFromText(messageText);
+    
     // Показываем, что бот думает
     await ctx.reply('🤔 Думаю...', { attachments: [keyboard_gigachat] });
     
@@ -654,16 +740,61 @@ bot.on('message_created', async (ctx: any) => {
       // Отправляем запрос в GigaChat
       const response = await gigaChatService.sendMessage(messageText);
       
-      // Отправляем ответ (разбиваем если слишком длинный)
-      if (response.length > 4096) {
-        const chunks = response.match(/[\s\S]{1,4096}/g) || [];
-        for (let i = 0; i < chunks.length; i++) {
-          await ctx.reply(chunks[i], { 
-            attachments: i === chunks.length - 1 ? keyboard_gigachat : undefined 
-          });
+      // Если распознали дедлайн, сохраняем его
+      if (parsedDeadline) {
+        try {
+          const deadline = addDeadline(userId, parsedDeadline);
+          const dueDate = new Date(deadline.dueDate);
+          
+          // Добавляем информацию о сохраненном дедлайне к ответу
+          const deadlineInfo = `\n\n✅ Дедлайн сохранен!\n` +
+            `📌 ${deadline.title}\n` +
+            (deadline.subject ? `📚 Предмет: ${deadline.subject}\n` : '') +
+            `📅 Срок: ${dueDate.toLocaleDateString('ru-RU', { 
+              day: '2-digit', 
+              month: '2-digit', 
+              year: 'numeric' 
+            })}\n` +
+            `💡 Вы можете посмотреть все дедлайны в меню "⏰ Дедлайны"`;
+          
+          // Отправляем ответ GigaChat с информацией о дедлайне
+          if ((response + deadlineInfo).length > 4096) {
+            const chunks = response.match(/[\s\S]{1,4000}/g) || [];
+            for (let i = 0; i < chunks.length; i++) {
+              await ctx.reply(chunks[i], { 
+                attachments: i === chunks.length - 1 ? keyboard_gigachat : undefined 
+              });
+            }
+            await ctx.reply(deadlineInfo, { attachments: [keyboard_gigachat] });
+          } else {
+            await ctx.reply(response + deadlineInfo, { attachments: [keyboard_gigachat] });
+          }
+        } catch (deadlineError) {
+          console.error('Ошибка при сохранении дедлайна:', deadlineError);
+          // Если не удалось сохранить дедлайн, просто отправляем ответ GigaChat
+          if (response.length > 4096) {
+            const chunks = response.match(/[\s\S]{1,4096}/g) || [];
+            for (let i = 0; i < chunks.length; i++) {
+              await ctx.reply(chunks[i], { 
+                attachments: i === chunks.length - 1 ? keyboard_gigachat : undefined 
+              });
+            }
+          } else {
+            await ctx.reply(response, { attachments: [keyboard_gigachat] });
+          }
         }
       } else {
-        await ctx.reply(response, { attachments: [keyboard_gigachat] });
+        // Обычный ответ без дедлайна
+        if (response.length > 4096) {
+          const chunks = response.match(/[\s\S]{1,4096}/g) || [];
+          for (let i = 0; i < chunks.length; i++) {
+            await ctx.reply(chunks[i], { 
+              attachments: i === chunks.length - 1 ? keyboard_gigachat : undefined 
+            });
+          }
+        } else {
+          await ctx.reply(response, { attachments: [keyboard_gigachat] });
+        }
       }
       
     } catch (error: any) {
