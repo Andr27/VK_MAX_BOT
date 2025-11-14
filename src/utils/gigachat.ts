@@ -11,7 +11,7 @@ export class GigaChatService {
     // Получение access token
     private async getAccessToken(): Promise<string> {
         try {
-            const credentials = process.env.GIGACHAT_CREDENTIALS || 'MDE5YTY4OGQtN2MzNy03MmNlLWFlMzAtYWZhOGU1ZDFkMTBkOmFlZjYzNTU1LTM4NWYtNGI4ZS1hNGRlLWJmMWUzMDM4NDY0OQ==';
+            const credentials = process.env.GIGACHAT_CREDENTIALS;
             
             const response = await axios.post(
                 'https://ngw.devices.sberbank.ru:9443/api/v2/oauth',
