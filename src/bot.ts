@@ -130,7 +130,11 @@ bot.action('gigachat', async (ctx: any) => {
 bot.action('first_time', async (ctx: any) => {
   await ctx.reply('Введите свой университет:');
 });
-
+const keyboard_gigachat = Keyboard.inlineKeyboard([
+    [
+        Keyboard.button.callback('🔙 В главное меню', 'backtomenu')
+    ],
+]);
 //Обработчик неизвестных команд
 if (GigachatBool == true) {
   bot.on('message_created', async (ctx: any) => {
@@ -142,4 +146,67 @@ if (GigachatBool == true) {
 } else {
   // код для случая, когда GigachatBool false
 }
+// НОВЫЙ ОБРАБОТЧИК GIGACHAT
+bot.action('gigachat', async (ctx) => {
+  const userId = ctx.message.from_id;
+  setUserState(userId, 'gigachat_mode');
+  
+  const gigachatWelcome = [
+    '🤖 Добро пожаловать в чат с GigaChat!',
+    '',
+    'Задайте любой вопрос нейросети:',
+    '• Объяснение сложных тем',
+    '• Помощь с домашними заданиями', 
+    '• Разбор теорий и концепций',
+    '• Решение задач',
+    '• И многое другое...',
+    '',
+    'Просто напишите ваш вопрос в чат!',
+    'Для возврата в главное меню нажмите кнопку ниже 👇'
+  ].join('\n');
+  
+  await ctx.reply(gigachatWelcome, { keyboard: keyboard_gigachat });
+});
+
+// Обработка текстовых сообщений для GigaChat
+bot.on('message', async (ctx: Context) => {
+  const userId = ctx.message.from_id;
+  const userState = getUserState(userId);
+  const messageText = ctx.message.text;
+  
+  // Пропускаем команды
+  if (messageText?.startsWith('/')) {
+    return;
+  }
+  
+  // Если пользователь в режиме GigaChat и это не команда
+  if (userState === 'gigachat_mode' && messageText && !messageText.startsWith('/')) {
+    // Показываем, что бот думает
+    await ctx.reply('🤔 Думаю...', { keyboard: keyboard_gigachat });
+    
+    try {
+      // Отправляем запрос в GigaChat
+      const response = await gigaChatService.sendMessage(messageText);
+      
+      // Отправляем ответ (разбиваем если слишком длинный)
+      if (response.length > 4096) {
+        const chunks = response.match(/[\s\S]{1,4096}/g) || [];
+        for (let i = 0; i < chunks.length; i++) {
+          await ctx.reply(chunks[i], { 
+            keyboard: i === chunks.length - 1 ? keyboard_gigachat : undefined 
+          });
+        }
+      } else {
+        await ctx.reply(response, { keyboard: keyboard_gigachat });
+      }
+      
+    } catch (error) {
+      console.error('GigaChat error:', error);
+      await ctx.reply(
+        '⚠️ Произошла ошибка при обращении к нейросети. Попробуйте еще раз.', 
+        { keyboard: keyboard_gigachat }
+      );
+    }
+  }
+});
 bot.start();
