@@ -1,7 +1,7 @@
 import { Bot } from '@maxhub/max-bot-api';
 import dotenv from 'dotenv';
 import path from 'path';
-import { keyboard_start }
+import { Keyboard } from '@maxhub/max-bot-api';
 
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
@@ -11,7 +11,41 @@ if (!botToken) {
   throw new Error('BOT_TOKEN не найден. Добавьте его в .env');
 }
 
+let GigachatBool:boolean = true;
+
 const bot = new Bot(botToken);
+
+//*****************************
+//********INLINE KEYBOARD******
+//*****************************
+
+const keyboard_start = Keyboard.inlineKeyboard([
+
+  [
+    Keyboard.button.callback('Начать', 'first_time')
+  ],
+]);
+
+const keyboard_mainmenu = Keyboard.inlineKeyboard([
+  [
+    Keyboard.button.callback('📅 Расписание', 'schedule'),
+    Keyboard.button.callback('🤖 GigaChat', 'gigachat')
+  ],
+  [
+    Keyboard.button.callback('Помощь❓', 'help')
+  ],
+]);
+
+const keyboard_helpmenu = Keyboard.inlineKeyboard([
+  [
+    Keyboard.button.callback('Помощь❓', 'help'),
+    Keyboard.button.callback('🔙Назад', 'back'),
+  ],
+]);
+
+//*****************************
+//********ТЕКСТИКИ*************
+//*****************************
 
 const startMessage = [
   'Приветствую. Ты здесь впервые?',
@@ -24,24 +58,88 @@ const startMessage = [
   '📅 Расписание — выдача пар по группе, дате или преподавателю.',
   '📘 Учебная помощь — объяснения, разбор задач, теория, формулы.',
   '⏰ Напоминания — уведомления о занятиях, дедлайнах и событиях.',
-  '🤖 GigaChat — точные ответы на любые нетривиальные вопросы.',
   '',
-  'Начни работу:',
-  'Отправь свою группу, предмет или вопрос.',
+  'Чтобы начать работу нажмите кнопку "Начать"',
 ].join('\n');
+
+const mainmenu = [
+  'Главное меню',
+  '',
+  'Выберите нужный раздел:',
+  '',
+  '📅 Расписание — просмотр пар по группе, дате или преподавателю',
+  '🤖 GigaChat — вопросы по учёбе и не только',
+  '❓ Помощь — инструкции и поддержка',
+].join('\n')
 
 const helpcomand = [
-  'Z',
-  'Z',
-  'Z',
+  '/start - стартовая программа',
+  '/help - помощь',
+  '/расписание' +
+  '',
 ].join('\n');
 
-bot.command('start', async (ctx: Context) => {
-  await ctx.reply(startMessage,{attachments: [keyboard]});
+const schedule = [
+  'Расписание типа',
+].join('\n');
+
+const gigachat = [
+  'GigaChat типа',
+].join('\n');
+
+const unknown = [
+  'Возможно, я вас не правильно понял, повторите свой запрос!',
+  'Либо воспользуйтесь меню "Помощь❓"'
+].join('\n');
+
+
+//************************************************
+//********ИНИЦИАЛИЗАЦИЯ КОМАНД ЧЕРЕЗ SLASH*************
+//************************************************
+
+bot.command('start', async (ctx) => {
+  // @ts-ignore
+  await ctx.reply(startMessage,{attachments: [keyboard_start]});
 });
 
-bot.action('help', async (ctx) => {
-  await ctx.reply(helpcomand,{attachments: [keyboard]});
+bot.command('help', async (ctx) => {
+  // @ts-ignore
+  await ctx.reply(helpcomand,{attachments: [keyboard_helpmenu]});
 });
 
+//************************************************
+//********ИНИЦИАЛИЗАЦИЯ INLINE КНОПОК*************
+//************************************************
+
+bot.action('back', async (ctx: any) => {
+  await ctx.reply(mainmenu,{attachments: [keyboard_mainmenu]});
+});
+
+bot.action('help', async (ctx: any) => {
+  await ctx.reply(helpcomand,{attachments: [keyboard_helpmenu]});
+});
+
+bot.action('schedule', async (ctx: any) => {
+  await ctx.reply(schedule,{attachments: [keyboard_helpmenu]});
+});
+
+bot.action('gigachat', async (ctx: any) => {
+  await ctx.reply(gigachat,{attachments: [keyboard_helpmenu]});
+});
+
+bot.action('first_time', async (ctx: any) => {
+  await ctx.reply('Введите свой университет:');
+});
+
+//Обработчик неизвестных команд
+if (GigachatBool == true) {
+  bot.on('message_created', async (ctx: any) => {
+    // @ts-ignore
+    await ctx.reply(unknown);
+    // @ts-ignore
+    await ctx.reply(mainmenu,{attachments: [keyboard_mainmenu]});
+  });
+} else {
+  // код для случая, когда GigachatBool false
+}
 bot.start();
