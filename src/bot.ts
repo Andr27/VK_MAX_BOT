@@ -276,31 +276,63 @@ bot.action('gigachat', async (ctx: any) => {
 
 // Обработка текстовых сообщений для GigaChat
 bot.on('message_created', async (ctx: any) => {
+  // Выводим полную структуру ctx для отладки
+  console.log('\n📨 ========== NEW MESSAGE ==========');
+  console.log('🔍 Full context structure:');
+  console.log('   - ctx keys:', Object.keys(ctx).join(', '));
+  if (ctx.message) {
+    console.log('   - ctx.message keys:', Object.keys(ctx.message).join(', '));
+    console.log('   - ctx.message full:', JSON.stringify(ctx.message, null, 2).substring(0, 500));
+  }
+  if (ctx.from) {
+    console.log('   - ctx.from keys:', Object.keys(ctx.from).join(', '));
+  }
+  
   // Пробуем разные варианты получения user ID и текста сообщения
-  const userId = ctx.message?.from_id || ctx.from?.id || ctx.message?.from?.id || ctx.userId;
-  const messageText = ctx.message?.text || ctx.text || ctx.message?.message?.text;
+  const userId = ctx.message?.from_id 
+    || ctx.message?.from?.id 
+    || ctx.message?.user_id
+    || ctx.message?.userId
+    || ctx.from?.id 
+    || ctx.userId
+    || ctx.user_id;
+    
+  const messageText = ctx.message?.text 
+    || ctx.message?.message?.text
+    || ctx.message?.body
+    || ctx.text 
+    || ctx.message?.content;
+    
   const isGigachatMode = userId ? (userGigachatMode.get(userId) || false) : false;
   
-  console.log('\n📨 ========== NEW MESSAGE ==========');
-  console.log('🔍 Context structure:');
-  console.log('   - ctx.message:', ctx.message ? 'exists' : 'undefined');
-  console.log('   - ctx.from:', ctx.from ? 'exists' : 'undefined');
+  console.log('🔍 Trying to extract:');
   console.log('   - ctx.message?.from_id:', ctx.message?.from_id);
-  console.log('   - ctx.from?.id:', ctx.from?.id);
   console.log('   - ctx.message?.from?.id:', ctx.message?.from?.id);
-  console.log('👤 User ID:', userId);
-  console.log('💬 Message:', messageText);
+  console.log('   - ctx.message?.user_id:', ctx.message?.user_id);
+  console.log('   - ctx.message?.userId:', ctx.message?.userId);
+  console.log('   - ctx.from?.id:', ctx.from?.id);
+  console.log('   - ctx.userId:', ctx.userId);
+  console.log('   - ctx.user_id:', ctx.user_id);
+  console.log('👤 User ID (final):', userId);
+  console.log('💬 Message (final):', messageText);
   console.log('🔧 GigaChat mode:', isGigachatMode);
   console.log('🕒 Time:', new Date().toLocaleString());
   console.log('📨 ================================\n');
+  
+  // Если нет user ID, пропускаем (это может быть системное сообщение)
+  if (!userId) {
+    console.log('⚠️ Skipping message: no user ID found');
+    return;
+  }
   
   // Пропускаем команды
   if (messageText?.startsWith('/')) {
     return;
   }
   
-  // Если это не текст сообщения (например, callback)
+  // Если это не текст сообщения (например, callback или другое событие)
   if (!messageText) {
+    console.log('⚠️ Skipping message: no text content');
     return;
   }
   
