@@ -14,7 +14,8 @@ import {
     addDeadline,
     removeDeadline,
     completeDeadline,
-    getActiveDeadlines
+    getActiveDeadlines,
+    updateDeadline
 } from './database/userData';
 import { parseDeadlineFromText } from './utils/deadlineParser';
 import { parseSchedule, formatSchedule, listGroups, isParserAvailable } from './parser/scheduleParser';
@@ -447,14 +448,15 @@ bot.action('deadlines', async (ctx: any) => {
   });
   
   message += '\n💡 Чтобы добавить дедлайн, напишите об этом в GigaChat!';
+  message += '\n\n📝 Для изменения или удаления дедлайна используйте кнопки ниже:';
   
-  // Создаем динамическую клавиатуру с кнопками удаления
+  // Создаем динамическую клавиатуру с кнопками изменения и удаления
   const deadlineButtons: any[] = [];
   activeDeadlines.forEach((deadline, index) => {
-    // Ограничиваем длину текста кнопки (VK имеет лимит)
-    const buttonText = `${index + 1}. Удалить "${deadline.title.substring(0, 20)}${deadline.title.length > 20 ? '...' : ''}"`;
+    const shortTitle = deadline.title.substring(0, 15);
     deadlineButtons.push([
-      Keyboard.button.callback(buttonText, `delete_deadline_${deadline.id}`)
+      Keyboard.button.callback(`✏️ ${index + 1}. Изменить`, `edit_deadline_${index + 1}`),
+      Keyboard.button.callback(`🗑️ ${index + 1}. Удалить`, `delete_deadline_${index + 1}`)
     ]);
   });
   
@@ -463,15 +465,15 @@ bot.action('deadlines', async (ctx: any) => {
     Keyboard.button.callback('🔙 В главное меню', 'back')
   ]);
   
-  const keyboard_with_delete = Keyboard.inlineKeyboard(deadlineButtons);
+  const keyboard_with_actions = Keyboard.inlineKeyboard(deadlineButtons);
   
   await ctx.api.sendMessageToChat(chatId, message, {
-    attachments: [keyboard_with_delete]
+    attachments: [keyboard_with_actions]
   });
 });
 
-// Обработчик для удаления дедлайна
-bot.action(/^delete_deadline_(.+)$/, async (ctx: any) => {
+// Обработчик для редактирования дедлайна
+bot.action(/^edit_deadline_(\d+)$/, async (ctx: any) => {
   const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
   const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
   
@@ -482,49 +484,83 @@ bot.action(/^delete_deadline_(.+)$/, async (ctx: any) => {
     return;
   }
   
-  // Извлекаем ID дедлайна из callback_data
-  const match = ctx.update?.callback_query?.data?.match(/^delete_deadline_(.+)$/);
+  // Извлекаем номер дедлайна
+  const match = ctx.update?.callback_query?.data?.match(/^edit_deadline_(\d+)$/);
   if (!match) {
-    await ctx.api.sendMessageToChat(chatId, 'Ошибка: не удалось определить дедлайн', {
+    await ctx.api.sendMessageToChat(chatId, 'Ошибка: не удалось определить номер дедлайна', {
       attachments: [keyboard_mainmenu]
     });
     return;
   }
   
-  const deadlineId = match[1];
-  const deadlines = getUserDeadlines(userId);
-  const deadline = deadlines.find(d => d.id === deadlineId);
+  const deadlineNumber = parseInt(match[1], 10);
+  const activeDeadlines = getActiveDeadlines(userId);
   
-  if (!deadline) {
-    await ctx.api.sendMessageToChat(chatId, '❌ Дедлайн не найден', {
+  if (deadlineNumber < 1 || deadlineNumber > activeDeadlines.length) {
+    await ctx.api.sendMessageToChat(chatId, '❌ Неверный номер дедлайна', {
       attachments: [keyboard_mainmenu]
     });
     return;
   }
   
-  // Удаляем дедлайн
-  const removed = removeDeadline(userId, deadlineId);
+  const deadline = activeDeadlines[deadlineNumber - 1];
   
-  if (removed) {
-    const activeDeadlines = getActiveDeadlines(userId);
-    
-    let message = `✅ Дедлайн "${deadline.title}" успешно удален!`;
-    
-    if (activeDeadlines.length > 0) {
-      message += `\n\n📋 Осталось дедлайнов: ${activeDeadlines.length}`;
-      message += `\n💡 Нажмите "⏰ Дедлайны" для просмотра обновленного списка`;
-    } else {
-      message += `\n\n📋 У вас больше нет активных дедлайнов.`;
-    }
-    
-    await ctx.api.sendMessageToChat(chatId, message, {
+  // Сохраняем ID дедлайна в состоянии
+  setUserState(userId, `waiting_deadline_edit_${deadline.id}`);
+  
+  await ctx.api.sendMessageToChat(chatId,
+    `✏️ Редактирование дедлайна #${deadlineNumber}:\n` +
+    `📌 ${deadline.title}\n\n` +
+    `📝 Напишите номер дедлайна (${deadlineNumber}) и новое описание, например:\n` +
+    `"${deadlineNumber} сдать курсовую по математике через 3 дня"\n\n` +
+    `💡 Или просто напишите новое описание без номера, если редактируете последний дедлайн.`,
+    { attachments: [keyboard_deadlines] }
+  );
+});
+
+// Обработчик для удаления дедлайна
+bot.action(/^delete_deadline_(\d+)$/, async (ctx: any) => {
+  const userId = ctx.message?.recipient?.user_id || ctx.update?.callback_query?.from?.id;
+  const chatId = ctx.message?.recipient?.chat_id || ctx.update?.callback_query?.message?.recipient?.chat_id || userId;
+  
+  if (!userId) {
+    await ctx.api.sendMessageToChat(chatId, 'Не удалось определить пользователя', {
       attachments: [keyboard_mainmenu]
     });
-  } else {
-    await ctx.api.sendMessageToChat(chatId, '❌ Ошибка при удалении дедлайна', {
-      attachments: [keyboard_mainmenu]
-    });
+    return;
   }
+  
+  // Извлекаем номер дедлайна
+  const match = ctx.update?.callback_query?.data?.match(/^delete_deadline_(\d+)$/);
+  if (!match) {
+    await ctx.api.sendMessageToChat(chatId, 'Ошибка: не удалось определить номер дедлайна', {
+      attachments: [keyboard_mainmenu]
+    });
+    return;
+  }
+  
+  const deadlineNumber = parseInt(match[1], 10);
+  const activeDeadlines = getActiveDeadlines(userId);
+  
+  if (deadlineNumber < 1 || deadlineNumber > activeDeadlines.length) {
+    await ctx.api.sendMessageToChat(chatId, '❌ Неверный номер дедлайна', {
+      attachments: [keyboard_mainmenu]
+    });
+    return;
+  }
+  
+  const deadline = activeDeadlines[deadlineNumber - 1];
+  
+  // Сохраняем ID дедлайна в состоянии
+  setUserState(userId, `waiting_deadline_delete_${deadline.id}`);
+  
+  await ctx.api.sendMessageToChat(chatId,
+    `🗑️ Удаление дедлайна #${deadlineNumber}:\n` +
+    `📌 ${deadline.title}\n\n` +
+    `⚠️ Для подтверждения удаления напишите номер дедлайна: ${deadlineNumber}\n\n` +
+    `💡 Или напишите "отмена" для отмены операции.`,
+    { attachments: [keyboard_deadlines] }
+  );
 });
 
 // Обработчик для показа полного расписания на неделю
@@ -689,6 +725,135 @@ bot.on('message_created', async (ctx: any) => {
   
   // Обработка состояний для настройки расписания
   const userState = getUserState(userId);
+  
+  // Обработка состояний для дедлайнов
+  if (userState.startsWith('waiting_deadline_edit_')) {
+    const deadlineId = userState.replace('waiting_deadline_edit_', '');
+    const deadline = getUserDeadlines(userId).find(d => d.id === deadlineId);
+    
+    if (!deadline) {
+      clearUserState(userId);
+      await ctx.reply('❌ Дедлайн не найден', { attachments: [keyboard_mainmenu] });
+      return;
+    }
+    
+    // Проверяем на отмену
+    if (messageText.toLowerCase().trim() === 'отмена' || messageText.toLowerCase().trim() === 'cancel') {
+      clearUserState(userId);
+      await ctx.reply('❌ Редактирование отменено', { attachments: [keyboard_mainmenu] });
+      return;
+    }
+    
+    // Парсим номер и новое описание
+    const text = messageText.trim();
+    const numberMatch = text.match(/^(\d+)\s+(.+)$/);
+    
+    let newDescription: string;
+    if (numberMatch) {
+      // Если есть номер в начале, используем текст после номера
+      newDescription = numberMatch[2];
+    } else {
+      // Если номера нет, используем весь текст
+      newDescription = text;
+    }
+    
+    // Парсим новый дедлайн из описания
+    const parsedDeadline = parseDeadlineFromText(newDescription);
+    
+    if (!parsedDeadline) {
+      await ctx.reply(
+        '❌ Не удалось распознать дедлайн в вашем сообщении.\n\n' +
+        '💡 Попробуйте еще раз, например:\n' +
+        `"${text.includes(deadline.title) ? text : deadline.title + ' ' + text}"\n\n` +
+        'Или напишите "отмена" для отмены.',
+        { attachments: [keyboard_deadlines] }
+      );
+      return;
+    }
+    
+    // Обновляем дедлайн
+    const updated = updateDeadline(userId, deadlineId, {
+      title: parsedDeadline.title,
+      subject: parsedDeadline.subject,
+      dueDate: parsedDeadline.dueDate,
+      description: parsedDeadline.description
+    });
+    
+    if (updated) {
+      clearUserState(userId);
+      const dueDate = new Date(parsedDeadline.dueDate);
+      await ctx.reply(
+        `✅ Дедлайн успешно обновлен!\n\n` +
+        `📌 ${parsedDeadline.title}\n` +
+        (parsedDeadline.subject ? `📚 Предмет: ${parsedDeadline.subject}\n` : '') +
+        `📅 Новый срок: ${dueDate.toLocaleDateString('ru-RU', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric' 
+        })}\n\n` +
+        `💡 Нажмите "⏰ Дедлайны" для просмотра обновленного списка`,
+        { attachments: [keyboard_mainmenu] }
+      );
+    } else {
+      await ctx.reply('❌ Ошибка при обновлении дедлайна', { attachments: [keyboard_mainmenu] });
+    }
+    return;
+  }
+  
+  if (userState.startsWith('waiting_deadline_delete_')) {
+    const deadlineId = userState.replace('waiting_deadline_delete_', '');
+    const deadline = getUserDeadlines(userId).find(d => d.id === deadlineId);
+    
+    if (!deadline) {
+      clearUserState(userId);
+      await ctx.reply('❌ Дедлайн не найден', { attachments: [keyboard_mainmenu] });
+      return;
+    }
+    
+    // Проверяем на отмену
+    if (messageText.toLowerCase().trim() === 'отмена' || messageText.toLowerCase().trim() === 'cancel') {
+      clearUserState(userId);
+      await ctx.reply('❌ Удаление отменено', { attachments: [keyboard_mainmenu] });
+      return;
+    }
+    
+    // Проверяем, что пользователь ввел номер дедлайна
+    const inputNumber = parseInt(messageText.trim(), 10);
+    const activeDeadlines = getActiveDeadlines(userId);
+    const deadlineIndex = activeDeadlines.findIndex(d => d.id === deadlineId);
+    
+    if (isNaN(inputNumber) || inputNumber !== deadlineIndex + 1) {
+      await ctx.reply(
+        `❌ Неверный номер. Для подтверждения удаления напишите номер дедлайна: ${deadlineIndex + 1}\n\n` +
+        `💡 Или напишите "отмена" для отмены операции.`,
+        { attachments: [keyboard_deadlines] }
+      );
+      return;
+    }
+    
+    // Удаляем дедлайн
+    const removed = removeDeadline(userId, deadlineId);
+    
+    if (removed) {
+      clearUserState(userId);
+      const remainingDeadlines = getActiveDeadlines(userId);
+      
+      let message = `✅ Дедлайн "${deadline.title}" успешно удален!`;
+      
+      if (remainingDeadlines.length > 0) {
+        message += `\n\n📋 Осталось дедлайнов: ${remainingDeadlines.length}`;
+        message += `\n💡 Нажмите "⏰ Дедлайны" для просмотра обновленного списка`;
+      } else {
+        message += `\n\n📋 У вас больше нет активных дедлайнов.`;
+      }
+      
+      await ctx.reply(message, { attachments: [keyboard_mainmenu] });
+    } else {
+      clearUserState(userId);
+      await ctx.reply('❌ Ошибка при удалении дедлайна', { attachments: [keyboard_mainmenu] });
+    }
+    return;
+  }
   
   if (userState === 'waiting_university') {
     // Пользователь вводит название университета

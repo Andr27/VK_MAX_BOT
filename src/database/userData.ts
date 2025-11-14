@@ -216,3 +216,18 @@ export function getActiveDeadlines(userId: number): Deadline[] {
     return deadlines.filter(d => !d.completed).sort((a, b) => a.dueDate - b.dueDate);
 }
 
+// Обновляем дедлайн
+export function updateDeadline(userId: number, deadlineId: string, updates: Partial<Omit<Deadline, 'id' | 'createdAt'>>): boolean {
+    const userData = getUserData(userId);
+    if (!userData || !userData.deadlines) {
+        return false;
+    }
+    
+    const deadlines = userData.deadlines.map(d => 
+        d.id === deadlineId ? { ...d, ...updates } : d
+    );
+    setUserData(userId, { deadlines });
+    
+    return true;
+}
+
