@@ -1,0 +1,62 @@
+# ============================================
+# VK MAX BOT - ВСЕ ЗАВИСИМОСТИ ПРОЕКТА
+# ============================================
+#
+# Этот файл содержит все зависимости проекта (Python и Node.js/TypeScript)
+#
+# ============================================
+# PYTHON DEPENDENCIES
+# ============================================
+# Для парсера расписания (parser/parser.py)
+#
+# Установка Python зависимостей:
+#   pip install -r requirements.txt
+#
+# Или вручную:
+#   pip install requests>=2.31.0 beautifulsoup4>=4.12.0
+
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+
+# ============================================
+# NODE.JS / TYPESCRIPT DEPENDENCIES
+# ============================================
+# Для основного бота (TypeScript)
+#
+# Установка Node.js зависимостей:
+#   npm install
+#
+# Production Dependencies (обязательные):
+#   @maxhub/max-bot-api@^0.2.1
+#   dotenv@^17.2.3
+#   axios@^1.6.0
+#
+# Development Dependencies (для разработки):
+#   @types/node@^24.10.1
+#   nodemon@^3.1.11
+#   ts-node@^10.9.2
+#   typescript@^5.9.3
+#
+# ============================================
+# ИНСТРУКЦИЯ ПО УСТАНОВКЕ ВСЕХ ЗАВИСИМОСТЕЙ
+# ============================================
+#
+# 1. Установите Python зависимости:
+#    pip install -r requirements.txt
+#
+# 2. Установите Node.js зависимости:
+#    npm install
+#
+# 3. Создайте файл .env с необходимыми переменными:
+#    BOT_TOKEN=your_bot_token
+#    GIGACHAT_CREDENTIALS=your_gigachat_credentials
+#
+# 4. Соберите TypeScript проект:
+#    npm run build
+#
+# 5. Запустите бота:
+#    npm run dev    # для разработки
+#    npm start      # для production
+#
+# ============================================
+
