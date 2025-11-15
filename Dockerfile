@@ -22,26 +22,13 @@ COPY src ./src
 RUN npm run build
 
 # ============================================
-# Этап 2: Python зависимости для парсера
-# ============================================
-FROM python:3.11-slim AS python-deps
-
-WORKDIR /app
-
-# Копируем requirements.txt для парсера
-COPY requirements.txt ./
-
-# Устанавливаем Python зависимости
-RUN pip install --no-cache-dir -r requirements.txt
-
-# ============================================
-# Этап 3: Финальный образ
+# Этап 2: Финальный образ
 # ============================================
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Устанавливаем Python для парсера
+# Устанавливаем Python и pip для парсера
 RUN apk add --no-cache python3 py3-pip
 
 # Копируем собранный JavaScript из builder
@@ -49,9 +36,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 
-# Копируем Python зависимости из python-deps
-COPY --from=python-deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=python-deps /usr/local/bin /usr/local/bin
+# Копируем requirements.txt и устанавливаем Python зависимости
+COPY requirements.txt ./
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
 # Копируем парсер и необходимые файлы
 COPY parser ./parser

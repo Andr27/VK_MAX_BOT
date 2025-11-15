@@ -5,7 +5,6 @@ import path from 'path';
 const UNIVERSITY_MAPPING: Record<string, string> = {
     // ТОГУ
     'тогу': 'togu',
-    'тогу': 'togu',
     'togu': 'togu',
     'тогу дв': 'togu',
     'тогу-дв': 'togu',
